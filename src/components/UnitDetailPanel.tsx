@@ -19,6 +19,15 @@ export type Tenancy = {
   end_date: string | null;
 };
 export type ResidentOption = { id: string; full_name: string; phone: string | null; tc_kimlik: string | null };
+export type LedgerRow = {
+  id: string | null;
+  tarih: string | null;
+  tur: string | null; // 'tahakkuk' | 'tahsilat'
+  aciklama: string | null;
+  borc: number | null;
+  odeme: number | null;
+  durum: string | null; // 'open' | 'paid' | null
+};
 
 type FormState = { full_name: string; user_id: string; phone: string; tc: string; move_debt: boolean };
 const emptyForm: FormState = { full_name: '', user_id: '', phone: '', tc: '', move_debt: false };
@@ -28,12 +37,18 @@ export function UnitDetailPanel({
   unitLabel,
   tenancies,
   totalDebt,
+  kalanAnapara,
+  kalanGecikme,
+  ledger,
   residents,
 }: {
   unitId: string;
   unitLabel: string;
   tenancies: Tenancy[];
   totalDebt: number;
+  kalanAnapara: number;
+  kalanGecikme: number;
+  ledger: LedgerRow[];
   residents: ResidentOption[];
 }) {
   const router = useRouter();
@@ -46,6 +61,17 @@ export function UnitDetailPanel({
   const currentOwner = tenancies.find((t) => t.relationship === 'malik' && !t.end_date) ?? null;
   const currentTenant = tenancies.find((t) => t.relationship === 'kiraci' && !t.end_date) ?? null;
   const history = tenancies.filter((t) => t.end_date);
+
+  // Cari hesap ekstresi: kronolojik (eski → yeni) yürüyen bakiye ile
+  let running = 0;
+  const statement = ledger.map((r) => {
+    running += Number(r.borc ?? 0) - Number(r.odeme ?? 0);
+    return { ...r, bakiye: running };
+  });
+  // Güncel borç dökümü: kapatılmamış tahakkuklar
+  const openAccruals = ledger.filter((r) => r.tur === 'tahakkuk' && r.durum === 'open');
+  // Son ödemeler: tahsilatlar, yeniden eskiye
+  const payments = ledger.filter((r) => r.tur === 'tahsilat').reverse();
 
   function set<K extends keyof FormState>(k: K, v: FormState[K]) {
     setForm((f) => ({ ...f, [k]: v }));
@@ -75,24 +101,24 @@ export function UnitDetailPanel({
     const sb = supabaseBrowser();
     const common = {
       p_unit_id: unitId,
-      p_phone: form.phone.trim() || null,
+      p_phone: form.phone.trim() || undefined,
     };
     const { error } =
       modal === 'owner' && currentOwner
         ? await sb.rpc('transfer_unit_ownership', {
             ...common,
             p_new_full_name: form.full_name.trim(),
-            p_new_user_id: form.user_id || null,
-            p_new_phone: form.phone.trim() || null,
-            p_new_tc: form.tc.trim() || null,
+            p_new_user_id: form.user_id || undefined,
+            p_new_phone: form.phone.trim() || undefined,
+            p_new_tc: form.tc.trim() || undefined,
             p_move_owner_debt: form.move_debt,
           })
         : await sb.rpc('set_unit_occupant', {
             ...common,
             p_relationship: modal === 'owner' ? 'malik' : 'kiraci',
             p_full_name: form.full_name.trim(),
-            p_user_id: form.user_id || null,
-            p_tc_kimlik: form.tc.trim() || null,
+            p_user_id: form.user_id || undefined,
+            p_tc_kimlik: form.tc.trim() || undefined,
           });
     setBusy(false);
     if (error) {
@@ -217,6 +243,133 @@ export function UnitDetailPanel({
           )}
         </Card>
       </div>
+
+      {/* GÜNCEL BORÇ DÖKÜMÜ */}
+      <Card title="Güncel Borç Dökümü">
+        <div className="mb-4 grid grid-cols-3 gap-3">
+          <div className="rounded-lg border-l-4 border-slate-300 bg-slate-50 px-3 py-2">
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Kalan Anapara</p>
+            <p className="mt-0.5 text-lg font-bold tabular-nums text-slate-800">{money(kalanAnapara, true)}</p>
+          </div>
+          <div className="rounded-lg border-l-4 border-amber-400 bg-amber-50 px-3 py-2">
+            <p className="text-xs font-medium uppercase tracking-wide text-amber-600">Gecikme Faizi</p>
+            <p className="mt-0.5 text-lg font-bold tabular-nums text-amber-700">{money(kalanGecikme, true)}</p>
+          </div>
+          <div className={`rounded-lg border-l-4 px-3 py-2 ${totalDebt > 0.005 ? 'border-red-500 bg-red-50' : 'border-emerald-400 bg-emerald-50'}`}>
+            <p className={`text-xs font-medium uppercase tracking-wide ${totalDebt > 0.005 ? 'text-red-500' : 'text-emerald-600'}`}>Toplam Borç</p>
+            <p className={`mt-0.5 text-lg font-bold tabular-nums ${totalDebt > 0.005 ? 'text-red-600' : 'text-emerald-700'}`}>
+              {money(totalDebt, true)}
+            </p>
+          </div>
+        </div>
+        {openAccruals.length === 0 ? (
+          <EmptyState>Açık borç yok — daire güncel.</EmptyState>
+        ) : (
+          <Table>
+            <thead>
+              <tr>
+                <Th>Tarih</Th>
+                <Th>Açıklama</Th>
+                <Th className="text-right">Tutar</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {openAccruals.map((r, i) => (
+                <tr key={r.id ?? i} className="border-l-2 border-red-400 hover:bg-slate-50">
+                  <Td className="tabular-nums text-slate-400">{date(r.tarih)}</Td>
+                  <Td className="font-medium text-slate-700">{r.aciklama ?? 'Tahakkuk'}</Td>
+                  <Td className="text-right font-bold tabular-nums text-red-600">{money(Number(r.borc ?? 0), true)}</Td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+        )}
+      </Card>
+
+      {/* SON ÖDEMELER */}
+      <Card title="Son Ödemeler">
+        {payments.length === 0 ? (
+          <EmptyState>Henüz ödeme kaydı yok.</EmptyState>
+        ) : (
+          <Table>
+            <thead>
+              <tr>
+                <Th>Tarih</Th>
+                <Th>Açıklama</Th>
+                <Th className="text-right">Tutar</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {payments.map((r, i) => (
+                <tr key={r.id ?? i} className="border-l-2 border-emerald-400 hover:bg-slate-50">
+                  <Td className="tabular-nums text-slate-400">{date(r.tarih)}</Td>
+                  <Td className="font-medium text-slate-700">{r.aciklama ?? 'Tahsilat'}</Td>
+                  <Td className="text-right font-bold tabular-nums text-emerald-600">
+                    + {money(Number(r.odeme ?? 0), true)}
+                  </Td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+        )}
+      </Card>
+
+      {/* CARİ HESAP EKSTRESİ */}
+      <Card title="Cari Hesap Ekstresi">
+        {statement.length === 0 ? (
+          <EmptyState>Hareket kaydı yok.</EmptyState>
+        ) : (
+          <Table>
+            <thead>
+              <tr>
+                <Th>Tarih</Th>
+                <Th>Açıklama</Th>
+                <Th className="text-right">Borç</Th>
+                <Th className="text-right">Ödeme</Th>
+                <Th className="text-right">Bakiye</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {statement.map((r, i) => {
+                const borc = Number(r.borc ?? 0);
+                const odeme = Number(r.odeme ?? 0);
+                const isTahsilat = r.tur === 'tahsilat';
+                return (
+                  <tr
+                    key={r.id ?? i}
+                    className={`border-l-2 hover:bg-slate-50 ${isTahsilat ? 'border-emerald-400' : 'border-red-400'}`}
+                  >
+                    <Td className="tabular-nums text-slate-400">{date(r.tarih)}</Td>
+                    <Td>
+                      <span className="mr-2 inline-block align-middle">
+                        <Badge tone={isTahsilat ? 'green' : 'amber'}>{isTahsilat ? 'Tahsilat' : 'Tahakkuk'}</Badge>
+                      </span>
+                      <span className="align-middle font-medium text-slate-700">
+                        {r.aciklama ?? (isTahsilat ? 'Tahsilat' : 'Tahakkuk')}
+                      </span>
+                    </Td>
+                    <Td className="text-right font-semibold tabular-nums text-red-600">
+                      {borc > 0.005 ? money(borc, true) : <span className="font-normal text-slate-300">—</span>}
+                    </Td>
+                    <Td className="text-right font-semibold tabular-nums text-emerald-600">
+                      {odeme > 0.005 ? `+ ${money(odeme, true)}` : <span className="font-normal text-slate-300">—</span>}
+                    </Td>
+                    <Td className={`text-right font-bold tabular-nums ${r.bakiye > 0.005 ? 'text-red-600' : 'text-emerald-600'}`}>
+                      {money(r.bakiye, true)}
+                    </Td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </Table>
+        )}
+        <div className="mt-3 flex items-center justify-end gap-2 rounded-lg bg-slate-50 px-4 py-2">
+          <span className="text-sm font-medium text-slate-500">Güncel Bakiye</span>
+          <span className={`text-lg font-bold tabular-nums ${totalDebt > 0.005 ? 'text-red-600' : 'text-emerald-600'}`}>
+            {money(totalDebt, true)}
+          </span>
+        </div>
+      </Card>
 
       {/* GEÇMİŞ */}
       <Card title="Geçmiş Sakinler">

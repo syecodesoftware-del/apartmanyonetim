@@ -14,77 +14,136 @@ export type Database = {
   }
   public: {
     Tables: {
-      site_deletion_requests: {
+      accruals: {
         Row: {
-          id: string
-          site_id: string
-          requested_by: string | null
-          reason: string | null
-          status: string
-          decided_by: string | null
-          decided_at: string | null
-          decision_note: string | null
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          site_id: string
-          requested_by?: string | null
-          reason?: string | null
-          status?: string
-          decided_by?: string | null
-          decided_at?: string | null
-          decision_note?: string | null
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          site_id?: string
-          requested_by?: string | null
-          reason?: string | null
-          status?: string
-          decided_by?: string | null
-          decided_at?: string | null
-          decision_note?: string | null
-          created_at?: string
-        }
-        Relationships: []
-      }
-      site_memberships: {
-        Row: {
-          id: string
-          user_id: string
-          site_id: string
-          unit_id: string | null
-          role: string
-          relationship: string | null
-          approval_status: string
-          is_active: boolean | null
+          amount: number
+          charge_type_id: string | null
           created_at: string | null
+          debtor_user_id: string | null
+          description: string | null
+          due_date: string
+          id: string
+          period_month: number | null
+          period_year: number | null
+          principal_remaining: number
+          site_id: string
+          status: string
+          unit_id: string | null
+          waive_reason: string | null
+          waived_at: string | null
+          waived_by: string | null
         }
         Insert: {
-          id?: string
-          user_id: string
-          site_id: string
-          unit_id?: string | null
-          role?: string
-          relationship?: string | null
-          approval_status?: string
-          is_active?: boolean | null
+          amount: number
+          charge_type_id?: string | null
           created_at?: string | null
+          debtor_user_id?: string | null
+          description?: string | null
+          due_date: string
+          id?: string
+          period_month?: number | null
+          period_year?: number | null
+          principal_remaining: number
+          site_id: string
+          status?: string
+          unit_id?: string | null
+          waive_reason?: string | null
+          waived_at?: string | null
+          waived_by?: string | null
         }
         Update: {
-          id?: string
-          user_id?: string
-          site_id?: string
-          unit_id?: string | null
-          role?: string
-          relationship?: string | null
-          approval_status?: string
-          is_active?: boolean | null
+          amount?: number
+          charge_type_id?: string | null
           created_at?: string | null
+          debtor_user_id?: string | null
+          description?: string | null
+          due_date?: string
+          id?: string
+          period_month?: number | null
+          period_year?: number | null
+          principal_remaining?: number
+          site_id?: string
+          status?: string
+          unit_id?: string | null
+          waive_reason?: string | null
+          waived_at?: string | null
+          waived_by?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "accruals_charge_type_id_fkey"
+            columns: ["charge_type_id"]
+            isOneToOne: false
+            referencedRelation: "charge_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "accruals_debtor_user_id_fkey"
+            columns: ["debtor_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "accruals_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "accruals_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "unit_balances"
+            referencedColumns: ["unit_id"]
+          },
+          {
+            foreignKeyName: "accruals_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      admin_audit_log: {
+        Row: {
+          action: string
+          admin_user_id: string | null
+          created_at: string
+          id: string
+          payload: Json | null
+          target_id: string | null
+          target_table: string | null
+        }
+        Insert: {
+          action: string
+          admin_user_id?: string | null
+          created_at?: string
+          id?: string
+          payload?: Json | null
+          target_id?: string | null
+          target_table?: string | null
+        }
+        Update: {
+          action?: string
+          admin_user_id?: string | null
+          created_at?: string
+          id?: string
+          payload?: Json | null
+          target_id?: string | null
+          target_table?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_audit_log_admin_user_id_fkey"
+            columns: ["admin_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       announcements: {
         Row: {
@@ -140,6 +199,167 @@ export type Database = {
           },
         ]
       }
+      auth_rate_limits: {
+        Row: {
+          attempts: number
+          key: string
+          window_start: string
+        }
+        Insert: {
+          attempts?: number
+          key: string
+          window_start?: string
+        }
+        Update: {
+          attempts?: number
+          key?: string
+          window_start?: string
+        }
+        Relationships: []
+      }
+      bank_transactions: {
+        Row: {
+          amount: number
+          balance_after: number | null
+          bank_ref: string | null
+          cash_account_id: string
+          counterparty: string | null
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          direction: string
+          id: string
+          match_status: string
+          matched_collection_id: string | null
+          matched_expense_id: string | null
+          site_id: string
+          txn_date: string
+        }
+        Insert: {
+          amount: number
+          balance_after?: number | null
+          bank_ref?: string | null
+          cash_account_id: string
+          counterparty?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          direction: string
+          id?: string
+          match_status?: string
+          matched_collection_id?: string | null
+          matched_expense_id?: string | null
+          site_id: string
+          txn_date: string
+        }
+        Update: {
+          amount?: number
+          balance_after?: number | null
+          bank_ref?: string | null
+          cash_account_id?: string
+          counterparty?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          direction?: string
+          id?: string
+          match_status?: string
+          matched_collection_id?: string | null
+          matched_expense_id?: string | null
+          site_id?: string
+          txn_date?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bank_transactions_cash_account_id_fkey"
+            columns: ["cash_account_id"]
+            isOneToOne: false
+            referencedRelation: "bank_reconciliation"
+            referencedColumns: ["cash_account_id"]
+          },
+          {
+            foreignKeyName: "bank_transactions_cash_account_id_fkey"
+            columns: ["cash_account_id"]
+            isOneToOne: false
+            referencedRelation: "cash_account_balances"
+            referencedColumns: ["cash_account_id"]
+          },
+          {
+            foreignKeyName: "bank_transactions_cash_account_id_fkey"
+            columns: ["cash_account_id"]
+            isOneToOne: false
+            referencedRelation: "cash_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bank_transactions_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bank_transactions_matched_collection_id_fkey"
+            columns: ["matched_collection_id"]
+            isOneToOne: false
+            referencedRelation: "collections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bank_transactions_matched_expense_id_fkey"
+            columns: ["matched_expense_id"]
+            isOneToOne: false
+            referencedRelation: "cash_expenses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bank_transactions_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      blocks: {
+        Row: {
+          created_at: string | null
+          id: string
+          manager_user_id: string | null
+          name: string
+          site_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          manager_user_id?: string | null
+          name: string
+          site_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          manager_user_id?: string | null
+          name?: string
+          site_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "blocks_manager_user_id_fkey"
+            columns: ["manager_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "blocks_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bookings: {
         Row: {
           area_name: string
@@ -187,6 +407,262 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cash_accounts: {
+        Row: {
+          ad: string
+          created_at: string | null
+          iban: string | null
+          id: string
+          is_active: boolean
+          opening_balance: number
+          site_id: string
+          tur: string
+        }
+        Insert: {
+          ad: string
+          created_at?: string | null
+          iban?: string | null
+          id?: string
+          is_active?: boolean
+          opening_balance?: number
+          site_id: string
+          tur?: string
+        }
+        Update: {
+          ad?: string
+          created_at?: string | null
+          iban?: string | null
+          id?: string
+          is_active?: boolean
+          opening_balance?: number
+          site_id?: string
+          tur?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cash_accounts_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cash_expenses: {
+        Row: {
+          amount: number
+          cash_account_id: string | null
+          category: string | null
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          id: string
+          receipt_url: string | null
+          site_id: string
+          spent_at: string
+        }
+        Insert: {
+          amount: number
+          cash_account_id?: string | null
+          category?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          receipt_url?: string | null
+          site_id: string
+          spent_at?: string
+        }
+        Update: {
+          amount?: number
+          cash_account_id?: string | null
+          category?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          receipt_url?: string | null
+          site_id?: string
+          spent_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cash_expenses_cash_account_id_fkey"
+            columns: ["cash_account_id"]
+            isOneToOne: false
+            referencedRelation: "bank_reconciliation"
+            referencedColumns: ["cash_account_id"]
+          },
+          {
+            foreignKeyName: "cash_expenses_cash_account_id_fkey"
+            columns: ["cash_account_id"]
+            isOneToOne: false
+            referencedRelation: "cash_account_balances"
+            referencedColumns: ["cash_account_id"]
+          },
+          {
+            foreignKeyName: "cash_expenses_cash_account_id_fkey"
+            columns: ["cash_account_id"]
+            isOneToOne: false
+            referencedRelation: "cash_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cash_expenses_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cash_expenses_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      charge_types: {
+        Row: {
+          ad: string
+          borc_hedefi: string
+          created_at: string | null
+          gecikme_uygula: boolean
+          id: string
+          is_active: boolean
+          is_icra: boolean
+          site_id: string
+        }
+        Insert: {
+          ad: string
+          borc_hedefi?: string
+          created_at?: string | null
+          gecikme_uygula?: boolean
+          id?: string
+          is_active?: boolean
+          is_icra?: boolean
+          site_id: string
+        }
+        Update: {
+          ad?: string
+          borc_hedefi?: string
+          created_at?: string | null
+          gecikme_uygula?: boolean
+          id?: string
+          is_active?: boolean
+          is_icra?: boolean
+          site_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "charge_types_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      collections: {
+        Row: {
+          amount: number
+          cash_account_id: string | null
+          created_at: string | null
+          dues_payment_id: string | null
+          id: string
+          method: string
+          paid_at: string | null
+          payer_user_id: string | null
+          receipt_url: string | null
+          site_id: string
+          unit_id: string | null
+        }
+        Insert: {
+          amount: number
+          cash_account_id?: string | null
+          created_at?: string | null
+          dues_payment_id?: string | null
+          id?: string
+          method?: string
+          paid_at?: string | null
+          payer_user_id?: string | null
+          receipt_url?: string | null
+          site_id: string
+          unit_id?: string | null
+        }
+        Update: {
+          amount?: number
+          cash_account_id?: string | null
+          created_at?: string | null
+          dues_payment_id?: string | null
+          id?: string
+          method?: string
+          paid_at?: string | null
+          payer_user_id?: string | null
+          receipt_url?: string | null
+          site_id?: string
+          unit_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "collections_cash_account_fk"
+            columns: ["cash_account_id"]
+            isOneToOne: false
+            referencedRelation: "bank_reconciliation"
+            referencedColumns: ["cash_account_id"]
+          },
+          {
+            foreignKeyName: "collections_cash_account_fk"
+            columns: ["cash_account_id"]
+            isOneToOne: false
+            referencedRelation: "cash_account_balances"
+            referencedColumns: ["cash_account_id"]
+          },
+          {
+            foreignKeyName: "collections_cash_account_fk"
+            columns: ["cash_account_id"]
+            isOneToOne: false
+            referencedRelation: "cash_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "collections_dues_payment_id_fkey"
+            columns: ["dues_payment_id"]
+            isOneToOne: false
+            referencedRelation: "dues_payments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "collections_payer_user_id_fkey"
+            columns: ["payer_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "collections_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "collections_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "unit_balances"
+            referencedColumns: ["unit_id"]
+          },
+          {
+            foreignKeyName: "collections_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
             referencedColumns: ["id"]
           },
         ]
@@ -346,7 +822,6 @@ export type Database = {
           created_at: string | null
           created_by: string | null
           description: string | null
-          due_date: string | null
           due_day: number | null
           id: string
           is_active: boolean | null
@@ -359,7 +834,6 @@ export type Database = {
           created_at?: string | null
           created_by?: string | null
           description?: string | null
-          due_date?: string | null
           due_day?: number | null
           id?: string
           is_active?: boolean | null
@@ -372,7 +846,6 @@ export type Database = {
           created_at?: string | null
           created_by?: string | null
           description?: string | null
-          due_date?: string | null
           due_day?: number | null
           id?: string
           is_active?: boolean | null
@@ -390,6 +863,86 @@ export type Database = {
           },
           {
             foreignKeyName: "dues_plans_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      late_fee_policies: {
+        Row: {
+          grace_days: number
+          gunluk_bolme: string
+          hesaplama_modu: string
+          oran_aylik: number
+          site_id: string
+          updated_at: string | null
+          yuvarlama: string
+        }
+        Insert: {
+          grace_days?: number
+          gunluk_bolme?: string
+          hesaplama_modu?: string
+          oran_aylik?: number
+          site_id: string
+          updated_at?: string | null
+          yuvarlama?: string
+        }
+        Update: {
+          grace_days?: number
+          gunluk_bolme?: string
+          hesaplama_modu?: string
+          oran_aylik?: number
+          site_id?: string
+          updated_at?: string | null
+          yuvarlama?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "late_fee_policies_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: true
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      late_fees: {
+        Row: {
+          accrual_id: string
+          amount: number
+          as_of_date: string
+          created_at: string | null
+          id: string
+          site_id: string
+        }
+        Insert: {
+          accrual_id: string
+          amount: number
+          as_of_date: string
+          created_at?: string | null
+          id?: string
+          site_id: string
+        }
+        Update: {
+          accrual_id?: string
+          amount?: number
+          as_of_date?: string
+          created_at?: string | null
+          id?: string
+          site_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "late_fees_accrual_id_fkey"
+            columns: ["accrual_id"]
+            isOneToOne: false
+            referencedRelation: "accruals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "late_fees_site_id_fkey"
             columns: ["site_id"]
             isOneToOne: false
             referencedRelation: "sites"
@@ -489,6 +1042,68 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payment_allocations: {
+        Row: {
+          accrual_id: string | null
+          amount: number
+          collection_id: string
+          created_at: string | null
+          id: string
+          late_fee_id: string | null
+          site_id: string
+          target_type: string
+        }
+        Insert: {
+          accrual_id?: string | null
+          amount: number
+          collection_id: string
+          created_at?: string | null
+          id?: string
+          late_fee_id?: string | null
+          site_id: string
+          target_type: string
+        }
+        Update: {
+          accrual_id?: string | null
+          amount?: number
+          collection_id?: string
+          created_at?: string | null
+          id?: string
+          late_fee_id?: string | null
+          site_id?: string
+          target_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_allocations_accrual_id_fkey"
+            columns: ["accrual_id"]
+            isOneToOne: false
+            referencedRelation: "accruals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_allocations_collection_id_fkey"
+            columns: ["collection_id"]
+            isOneToOne: false
+            referencedRelation: "collections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_allocations_late_fee_id_fkey"
+            columns: ["late_fee_id"]
+            isOneToOne: false
+            referencedRelation: "late_fees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_allocations_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
             referencedColumns: ["id"]
           },
         ]
@@ -607,53 +1222,53 @@ export type Database = {
           },
         ]
       }
-      qr_payments: {
+      site_deletion_requests: {
         Row: {
-          amount: number
-          code: string
-          created_at: string | null
-          expires_at: string
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          decision_note: string | null
           id: string
-          is_used: boolean | null
+          reason: string | null
+          requested_by: string | null
           site_id: string
-          used_at: string | null
-          user_id: string
+          status: string
         }
         Insert: {
-          amount: number
-          code?: string
-          created_at?: string | null
-          expires_at: string
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision_note?: string | null
           id?: string
-          is_used?: boolean | null
+          reason?: string | null
+          requested_by?: string | null
           site_id: string
-          used_at?: string | null
-          user_id: string
+          status?: string
         }
         Update: {
-          amount?: number
-          code?: string
-          created_at?: string | null
-          expires_at?: string
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision_note?: string | null
           id?: string
-          is_used?: boolean | null
+          reason?: string | null
+          requested_by?: string | null
           site_id?: string
-          used_at?: string | null
-          user_id?: string
+          status?: string
         }
         Relationships: [
           {
-            foreignKeyName: "qr_payments_site_id_fkey"
-            columns: ["site_id"]
+            foreignKeyName: "site_deletion_requests_requested_by_fkey"
+            columns: ["requested_by"]
             isOneToOne: false
-            referencedRelation: "sites"
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "qr_payments_user_id_fkey"
-            columns: ["user_id"]
+            foreignKeyName: "site_deletion_requests_site_id_fkey"
+            columns: ["site_id"]
             isOneToOne: false
-            referencedRelation: "users"
+            referencedRelation: "sites"
             referencedColumns: ["id"]
           },
         ]
@@ -737,6 +1352,71 @@ export type Database = {
           },
         ]
       }
+      site_memberships: {
+        Row: {
+          approval_status: string
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          relationship: string | null
+          role: string
+          site_id: string
+          unit_id: string | null
+          user_id: string
+        }
+        Insert: {
+          approval_status?: string
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          relationship?: string | null
+          role?: string
+          site_id: string
+          unit_id?: string | null
+          user_id: string
+        }
+        Update: {
+          approval_status?: string
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          relationship?: string | null
+          role?: string
+          site_id?: string
+          unit_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "site_memberships_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_memberships_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "unit_balances"
+            referencedColumns: ["unit_id"]
+          },
+          {
+            foreignKeyName: "site_memberships_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_memberships_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sites: {
         Row: {
           address: string | null
@@ -746,9 +1426,9 @@ export type Database = {
           city: string | null
           code_generated_at: string | null
           created_at: string | null
-          district: string | null
           deleted_at: string | null
           deleted_by: string | null
+          district: string | null
           id: string
           independent_unit_count: number
           is_individual: boolean
@@ -774,9 +1454,12 @@ export type Database = {
           city?: string | null
           code_generated_at?: string | null
           created_at?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
           district?: string | null
           id?: string
           independent_unit_count?: number
+          is_individual?: boolean
           logo_url?: string | null
           name: string
           neighborhood?: string | null
@@ -799,9 +1482,12 @@ export type Database = {
           city?: string | null
           code_generated_at?: string | null
           created_at?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
           district?: string | null
           id?: string
           independent_unit_count?: number
+          is_individual?: boolean
           logo_url?: string | null
           name?: string
           neighborhood?: string | null
@@ -865,53 +1551,131 @@ export type Database = {
           },
         ]
       }
-      transactions: {
+      tenancies: {
         Row: {
-          amount: number
-          category: string | null
-          created_at: string | null
+          created_at: string
           created_by: string | null
-          date: string
-          description: string | null
+          end_date: string | null
+          full_name: string
           id: string
-          receipt_url: string | null
+          phone: string | null
+          relationship: string
           site_id: string
-          type: string
+          start_date: string
+          tc_kimlik: string | null
+          unit_id: string
+          user_id: string | null
         }
         Insert: {
-          amount: number
-          category?: string | null
-          created_at?: string | null
+          created_at?: string
           created_by?: string | null
-          date?: string
-          description?: string | null
+          end_date?: string | null
+          full_name: string
           id?: string
-          receipt_url?: string | null
+          phone?: string | null
+          relationship: string
           site_id: string
-          type: string
+          start_date?: string
+          tc_kimlik?: string | null
+          unit_id: string
+          user_id?: string | null
         }
         Update: {
-          amount?: number
-          category?: string | null
-          created_at?: string | null
+          created_at?: string
           created_by?: string | null
-          date?: string
-          description?: string | null
+          end_date?: string | null
+          full_name?: string
           id?: string
-          receipt_url?: string | null
+          phone?: string | null
+          relationship?: string
           site_id?: string
-          type?: string
+          start_date?: string
+          tc_kimlik?: string | null
+          unit_id?: string
+          user_id?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "transactions_created_by_fkey"
+            foreignKeyName: "tenancies_created_by_fkey"
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "transactions_site_id_fkey"
+            foreignKeyName: "tenancies_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenancies_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "unit_balances"
+            referencedColumns: ["unit_id"]
+          },
+          {
+            foreignKeyName: "tenancies_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenancies_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      units: {
+        Row: {
+          ada_id: string | null
+          apartment_number: string
+          arsa_payi: number | null
+          block: string | null
+          created_at: string | null
+          floor: number | null
+          id: string
+          m2: number | null
+          site_id: string
+        }
+        Insert: {
+          ada_id?: string | null
+          apartment_number: string
+          arsa_payi?: number | null
+          block?: string | null
+          created_at?: string | null
+          floor?: number | null
+          id?: string
+          m2?: number | null
+          site_id: string
+        }
+        Update: {
+          ada_id?: string | null
+          apartment_number?: string
+          arsa_payi?: number | null
+          block?: string | null
+          created_at?: string | null
+          floor?: number | null
+          id?: string
+          m2?: number | null
+          site_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "units_ada_id_fkey"
+            columns: ["ada_id"]
+            isOneToOne: false
+            referencedRelation: "blocks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "units_site_id_fkey"
             columns: ["site_id"]
             isOneToOne: false
             referencedRelation: "sites"
@@ -953,274 +1717,6 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      late_fee_policies: {
-        Row: { grace_days: number; gunluk_bolme: string; hesaplama_modu: string; oran_aylik: number; site_id: string; updated_at: string | null; yuvarlama: string }
-        Insert: { grace_days?: number; gunluk_bolme?: string; hesaplama_modu?: string; oran_aylik?: number; site_id: string; updated_at?: string | null; yuvarlama?: string }
-        Update: { grace_days?: number; gunluk_bolme?: string; hesaplama_modu?: string; oran_aylik?: number; site_id?: string; updated_at?: string | null; yuvarlama?: string }
-        Relationships: [
-          {
-            foreignKeyName: "late_fee_policies_site_id_fkey"
-            columns: ["site_id"]
-            isOneToOne: true
-            referencedRelation: "sites"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      accruals: {
-        Row: { amount: number; charge_type_id: string | null; created_at: string | null; debtor_user_id: string | null; description: string | null; due_date: string | null; id: string; period_month: number | null; period_year: number | null; principal_remaining: number; site_id: string; status: string; unit_id: string | null }
-        Insert: { amount: number; charge_type_id?: string | null; created_at?: string | null; debtor_user_id?: string | null; description?: string | null; due_date?: string | null; id?: string; period_month?: number | null; period_year?: number | null; principal_remaining: number; site_id: string; status?: string; unit_id?: string | null }
-        Update: { amount?: number; charge_type_id?: string | null; created_at?: string | null; debtor_user_id?: string | null; description?: string | null; due_date?: string | null; id?: string; period_month?: number | null; period_year?: number | null; principal_remaining?: number; site_id?: string; status?: string; unit_id?: string | null }
-        Relationships: []
-      }
-      charge_types: {
-        Row: { ad: string; borc_hedefi: string; created_at: string | null; gecikme_uygula: boolean; id: string; is_active: boolean; is_icra: boolean; site_id: string }
-        Insert: { ad: string; borc_hedefi?: string; created_at?: string | null; gecikme_uygula?: boolean; id?: string; is_active?: boolean; is_icra?: boolean; site_id: string }
-        Update: { ad?: string; borc_hedefi?: string; created_at?: string | null; gecikme_uygula?: boolean; id?: string; is_active?: boolean; is_icra?: boolean; site_id?: string }
-        Relationships: [
-          {
-            foreignKeyName: "charge_types_site_id_fkey"
-            columns: ["site_id"]
-            isOneToOne: false
-            referencedRelation: "sites"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      cash_accounts: {
-        Row: { ad: string; created_at: string | null; iban: string | null; id: string; is_active: boolean; opening_balance: number; site_id: string; tur: string }
-        Insert: { ad: string; created_at?: string | null; iban?: string | null; id?: string; is_active?: boolean; opening_balance?: number; site_id: string; tur?: string }
-        Update: { ad?: string; created_at?: string | null; iban?: string | null; id?: string; is_active?: boolean; opening_balance?: number; site_id?: string; tur?: string }
-        Relationships: [
-          {
-            foreignKeyName: "cash_accounts_site_id_fkey"
-            columns: ["site_id"]
-            isOneToOne: false
-            referencedRelation: "sites"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      cash_expenses: {
-        Row: { amount: number; cash_account_id: string | null; category: string | null; created_at: string | null; created_by: string | null; description: string | null; id: string; receipt_url: string | null; site_id: string; spent_at: string }
-        Insert: { amount: number; cash_account_id?: string | null; category?: string | null; created_at?: string | null; created_by?: string | null; description?: string | null; id?: string; receipt_url?: string | null; site_id: string; spent_at?: string }
-        Update: { amount?: number; cash_account_id?: string | null; category?: string | null; created_at?: string | null; created_by?: string | null; description?: string | null; id?: string; receipt_url?: string | null; site_id?: string; spent_at?: string }
-        Relationships: [
-          {
-            foreignKeyName: "cash_expenses_cash_account_id_fkey"
-            columns: ["cash_account_id"]
-            isOneToOne: false
-            referencedRelation: "cash_accounts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "cash_expenses_site_id_fkey"
-            columns: ["site_id"]
-            isOneToOne: false
-            referencedRelation: "sites"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      collections: {
-        Row: { amount: number; cash_account_id: string | null; created_at: string | null; id: string; method: string; paid_at: string | null; payer_user_id: string | null; receipt_url: string | null; site_id: string; unit_id: string | null }
-        Insert: { amount: number; cash_account_id?: string | null; created_at?: string | null; id?: string; method?: string; paid_at?: string | null; payer_user_id?: string | null; receipt_url?: string | null; site_id: string; unit_id?: string | null }
-        Update: { amount?: number; cash_account_id?: string | null; created_at?: string | null; id?: string; method?: string; paid_at?: string | null; payer_user_id?: string | null; receipt_url?: string | null; site_id?: string; unit_id?: string | null }
-        Relationships: [
-          {
-            foreignKeyName: "collections_cash_account_id_fkey"
-            columns: ["cash_account_id"]
-            isOneToOne: false
-            referencedRelation: "cash_accounts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "collections_site_id_fkey"
-            columns: ["site_id"]
-            isOneToOne: false
-            referencedRelation: "sites"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      bank_transactions: {
-        Row: { amount: number; balance_after: number | null; bank_ref: string | null; cash_account_id: string; counterparty: string | null; created_at: string | null; created_by: string | null; description: string | null; direction: string; id: string; match_status: string; matched_collection_id: string | null; matched_expense_id: string | null; site_id: string; txn_date: string }
-        Insert: { amount: number; balance_after?: number | null; bank_ref?: string | null; cash_account_id: string; counterparty?: string | null; created_at?: string | null; created_by?: string | null; description?: string | null; direction: string; id?: string; match_status?: string; matched_collection_id?: string | null; matched_expense_id?: string | null; site_id: string; txn_date: string }
-        Update: { amount?: number; balance_after?: number | null; bank_ref?: string | null; cash_account_id?: string; counterparty?: string | null; created_at?: string | null; created_by?: string | null; description?: string | null; direction?: string; id?: string; match_status?: string; matched_collection_id?: string | null; matched_expense_id?: string | null; site_id?: string; txn_date?: string }
-        Relationships: [
-          {
-            foreignKeyName: "bank_transactions_cash_account_id_fkey"
-            columns: ["cash_account_id"]
-            isOneToOne: false
-            referencedRelation: "cash_accounts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "bank_transactions_matched_collection_id_fkey"
-            columns: ["matched_collection_id"]
-            isOneToOne: false
-            referencedRelation: "collections"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "bank_transactions_site_id_fkey"
-            columns: ["site_id"]
-            isOneToOne: false
-            referencedRelation: "sites"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      blocks: {
-        Row: {
-          created_at: string | null
-          id: string
-          manager_user_id: string | null
-          name: string
-          site_id: string
-        }
-        Insert: {
-          created_at?: string | null
-          id?: string
-          manager_user_id?: string | null
-          name: string
-          site_id: string
-        }
-        Update: {
-          created_at?: string | null
-          id?: string
-          manager_user_id?: string | null
-          name?: string
-          site_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "blocks_site_id_fkey"
-            columns: ["site_id"]
-            isOneToOne: false
-            referencedRelation: "sites"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "blocks_manager_user_id_fkey"
-            columns: ["manager_user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      tenancies: {
-        Row: {
-          id: string
-          site_id: string
-          unit_id: string
-          user_id: string | null
-          relationship: string
-          full_name: string
-          phone: string | null
-          tc_kimlik: string | null
-          start_date: string
-          end_date: string | null
-          created_at: string
-          created_by: string | null
-        }
-        Insert: {
-          id?: string
-          site_id: string
-          unit_id: string
-          user_id?: string | null
-          relationship: string
-          full_name: string
-          phone?: string | null
-          tc_kimlik?: string | null
-          start_date?: string
-          end_date?: string | null
-          created_at?: string
-          created_by?: string | null
-        }
-        Update: {
-          id?: string
-          site_id?: string
-          unit_id?: string
-          user_id?: string | null
-          relationship?: string
-          full_name?: string
-          phone?: string | null
-          tc_kimlik?: string | null
-          start_date?: string
-          end_date?: string | null
-          created_at?: string
-          created_by?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "tenancies_unit_id_fkey"
-            columns: ["unit_id"]
-            isOneToOne: false
-            referencedRelation: "units"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "tenancies_site_id_fkey"
-            columns: ["site_id"]
-            isOneToOne: false
-            referencedRelation: "sites"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      units: {
-        Row: {
-          ada_id: string | null
-          apartment_number: string
-          arsa_payi: number | null
-          block: string | null
-          created_at: string | null
-          floor: number | null
-          id: string
-          m2: number | null
-          site_id: string
-        }
-        Insert: {
-          ada_id?: string | null
-          apartment_number: string
-          arsa_payi?: number | null
-          block?: string | null
-          created_at?: string | null
-          floor?: number | null
-          id?: string
-          m2?: number | null
-          site_id: string
-        }
-        Update: {
-          ada_id?: string | null
-          apartment_number?: string
-          arsa_payi?: number | null
-          block?: string | null
-          created_at?: string | null
-          floor?: number | null
-          id?: string
-          m2?: number | null
-          site_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "units_site_id_fkey"
-            columns: ["site_id"]
-            isOneToOne: false
-            referencedRelation: "sites"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "units_ada_id_fkey"
-            columns: ["ada_id"]
-            isOneToOne: false
-            referencedRelation: "blocks"
             referencedColumns: ["id"]
           },
         ]
@@ -1310,168 +1806,340 @@ export type Database = {
             referencedRelation: "sites"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "users_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "unit_balances"
+            referencedColumns: ["unit_id"]
+          },
+          {
+            foreignKeyName: "users_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
         ]
       }
     }
     Views: {
-      complaints_manager_view: {
+      bank_reconciliation: {
         Row: {
-          id: string | null
+          ad: string | null
+          banka_net: number | null
+          cash_account_id: string | null
+          defter_bakiye: number | null
+          eslesmeyen_sayi: number | null
+          eslesmeyen_tutar: number | null
+          iban: string | null
           site_id: string | null
-          user_id: string | null
-          category: string | null
-          title: string | null
-          description: string | null
-          status: string | null
-          priority: string | null
-          photos: Json | null
-          resolved_by: string | null
-          resolved_at: string | null
-          resolution_note: string | null
-          is_anonymous: boolean | null
-          created_at: string | null
-          updated_at: string | null
+          toplam_hareket: number | null
         }
-        Relationships: []
-      }
-      current_occupants: {
-        Row: {
-          tenancy_id: string | null
-          site_id: string | null
-          unit_id: string | null
-          block: string | null
-          apartment_number: string | null
-          floor: number | null
-          user_id: string | null
-          relationship: string | null
-          full_name: string | null
-          phone: string | null
-          tc_kimlik: string | null
-          email: string | null
-          account_role: string | null
-          approval_status: string | null
-          has_account: boolean | null
-          start_date: string | null
-          created_at: string | null
-          toplam_borc: number | null
-          kalan_anapara: number | null
-          kalan_gecikme: number | null
-        }
-        Relationships: []
-      }
-      unit_balances: {
-        Row: {
-          unit_id: string | null
-          site_id: string | null
-          block: string | null
-          apartment_number: string | null
-          kalan_anapara: number | null
-          kalan_gecikme: number | null
-          toplam_borc: number | null
-        }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "cash_accounts_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       cash_account_balances: {
         Row: {
-          cash_account_id: string | null
-          site_id: string | null
           ad: string | null
-          tur: string | null
-          is_active: boolean | null
           balance: number | null
+          cash_account_id: string | null
+          is_active: boolean | null
+          site_id: string | null
+          tur: string | null
         }
-        Relationships: []
+        Insert: {
+          ad?: string | null
+          balance?: never
+          cash_account_id?: string | null
+          is_active?: boolean | null
+          site_id?: string | null
+          tur?: string | null
+        }
+        Update: {
+          ad?: string | null
+          balance?: never
+          cash_account_id?: string | null
+          is_active?: boolean | null
+          site_id?: string | null
+          tur?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cash_accounts_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       cash_movements: {
         Row: {
-          id: string | null
-          site_id: string | null
-          cash_account_id: string | null
-          yon: string | null
           amount: number | null
-          hareket_tarihi: string | null
-          tur: string | null
+          cash_account_id: string | null
           detay: string | null
+          hareket_tarihi: string | null
+          id: string | null
           sirala: string | null
+          site_id: string | null
+          tur: string | null
+          yon: string | null
         }
         Relationships: []
       }
-      bank_reconciliation: {
+      complaints_manager_view: {
         Row: {
-          cash_account_id: string | null
+          category: string | null
+          created_at: string | null
+          description: string | null
+          id: string | null
+          is_anonymous: boolean | null
+          photos: Json | null
+          priority: string | null
+          resolution_note: string | null
+          resolved_at: string | null
+          resolved_by: string | null
           site_id: string | null
-          ad: string | null
-          iban: string | null
-          defter_bakiye: number | null
-          banka_net: number | null
-          eslesmeyen_sayi: number | null
-          eslesmeyen_tutar: number | null
-          toplam_hareket: number | null
+          status: string | null
+          title: string | null
+          updated_at: string | null
+          user_id: string | null
         }
-        Relationships: []
+        Insert: {
+          category?: string | null
+          created_at?: string | null
+          description?: string | null
+          id?: string | null
+          is_anonymous?: boolean | null
+          photos?: Json | null
+          priority?: string | null
+          resolution_note?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          site_id?: string | null
+          status?: string | null
+          title?: string | null
+          updated_at?: string | null
+          user_id?: never
+        }
+        Update: {
+          category?: string | null
+          created_at?: string | null
+          description?: string | null
+          id?: string | null
+          is_anonymous?: boolean | null
+          photos?: Json | null
+          priority?: string | null
+          resolution_note?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          site_id?: string | null
+          status?: string | null
+          title?: string | null
+          updated_at?: string | null
+          user_id?: never
+        }
+        Relationships: [
+          {
+            foreignKeyName: "complaints_resolved_by_fkey"
+            columns: ["resolved_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "complaints_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      current_occupants: {
+        Row: {
+          account_role: string | null
+          apartment_number: string | null
+          approval_status: string | null
+          block: string | null
+          created_at: string | null
+          email: string | null
+          floor: number | null
+          full_name: string | null
+          has_account: boolean | null
+          kalan_anapara: number | null
+          kalan_gecikme: number | null
+          phone: string | null
+          relationship: string | null
+          site_id: string | null
+          start_date: string | null
+          tc_kimlik: string | null
+          tenancy_id: string | null
+          toplam_borc: number | null
+          unit_id: string | null
+          user_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenancies_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenancies_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "unit_balances"
+            referencedColumns: ["unit_id"]
+          },
+          {
+            foreignKeyName: "tenancies_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenancies_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      unit_balances: {
+        Row: {
+          apartment_number: string | null
+          avans: number | null
+          block: string | null
+          kalan_anapara: number | null
+          kalan_gecikme: number | null
+          net_borc: number | null
+          site_id: string | null
+          toplam_borc: number | null
+          unit_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "units_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       unit_ledger: {
         Row: {
-          id: string | null
-          site_id: string | null
-          unit_id: string | null
-          tarih: string | null
-          tur: string | null
           aciklama: string | null
           borc: number | null
+          durum: string | null
+          id: string | null
           odeme: number | null
           sirala: string | null
-          durum: string | null
+          site_id: string | null
+          tarih: string | null
+          tur: string | null
+          unit_id: string | null
         }
         Relationships: []
       }
     }
     Functions: {
+      _allocate_collection_core: {
+        Args: { p_collection_id: string }
+        Returns: number
+      }
+      _assert_site_manager: { Args: { p_site_id: string }; Returns: undefined }
+      _generate_accruals_core: {
+        Args: {
+          p_amount: number
+          p_charge_type_id: string
+          p_distribution: string
+          p_due_date: string
+          p_period_month: number
+          p_period_year: number
+          p_site_id: string
+        }
+        Returns: number
+      }
+      _reallocate_site_advances_core: {
+        Args: { p_site_id: string }
+        Returns: number
+      }
+      admin_approve_site_deletion: {
+        Args: { p_admin_id: string; p_note?: string; p_request_id: string }
+        Returns: string
+      }
+      allocate_collection: {
+        Args: { p_collection_id: string }
+        Returns: number
+      }
+      approve_bank_txn_as_collection: {
+        Args: { p_txn_id: string; p_unit_id: string }
+        Returns: Json
+      }
+      approve_site_membership: {
+        Args: {
+          p_approve: boolean
+          p_membership_id: string
+          p_unit_id?: string
+        }
+        Returns: undefined
+      }
       auth_user_approval_status: { Args: never; Returns: string }
       auth_user_role: { Args: never; Returns: string }
       auth_user_site_id: { Args: never; Returns: string }
-      switch_active_site: { Args: { p_site_id: string }; Returns: string }
-      request_site_membership: {
-        Args: { p_site_code: string }
-        Returns: { site_id: string; site_name: string; status: string }
-      }
-      approve_site_membership: {
-        Args: { p_membership_id: string; p_approve: boolean; p_unit_id?: string }
-        Returns: undefined
-      }
+      auth_user_unit_id: { Args: never; Returns: string }
+      bulk_import_units_residents: { Args: { p_rows: Json }; Returns: Json }
       calculate_late_fees: {
-        Args: { p_site_id: string; p_as_of_date: string }
+        Args: { p_as_of_date: string; p_site_id: string }
         Returns: number
+      }
+      cancel_site_deletion_request: {
+        Args: { p_request_id: string }
+        Returns: Json
+      }
+      check_auth_rate_limit: {
+        Args: { p_key: string; p_max?: number; p_window_seconds?: number }
+        Returns: boolean
+      }
+      clear_auth_rate_limit: { Args: { p_key: string }; Returns: undefined }
+      end_tenancy: {
+        Args: { p_end_date?: string; p_tenancy_id: string }
+        Returns: undefined
       }
       generate_accruals: {
         Args: {
-          p_site_id: string
+          p_amount: number
           p_charge_type_id: string
+          p_distribution: string
+          p_due_date: string
           p_period_month: number
           p_period_year: number
-          p_due_date: string
-          p_amount: number
-          p_distribution: string
+          p_site_id: string
         }
         Returns: number
       }
       generate_site_code: { Args: never; Returns: string }
-      record_collection: {
-        Args: {
-          p_site_id: string
-          p_unit_id: string
-          p_amount: number
-          p_method?: string
-          p_paid_at?: string
-          p_cash_account_id?: string
-        }
-        Returns: number
-      }
       get_debtors: {
         Args: never
         Returns: {
           amount: number
+          anapara: number
           full_name: string
+          gecikme: number
           period_month: number
           period_year: number
           phone: string
@@ -1490,6 +2158,84 @@ export type Database = {
           site_name: string
         }[]
       }
+      get_upcoming_dues: {
+        Args: { p_days?: number }
+        Returns: {
+          amount: number
+          apartment_number: string
+          block: string
+          due_date: string
+          full_name: string
+          phone: string
+          site_id: string
+          user_id: string
+        }[]
+      }
+      is_valid_tc: { Args: { p_tc: string }; Returns: boolean }
+      record_collection: {
+        Args: {
+          p_amount: number
+          p_cash_account_id?: string
+          p_method?: string
+          p_paid_at?: string
+          p_site_id: string
+          p_unit_id: string
+        }
+        Returns: number
+      }
+      request_site_deletion: { Args: { p_reason: string }; Returns: Json }
+      request_site_membership: { Args: { p_site_code: string }; Returns: Json }
+      run_monthly_accruals: {
+        Args: { p_month?: number; p_year?: number }
+        Returns: {
+          accruals_created: number
+          note: string
+          site_id: string
+          site_name: string
+        }[]
+      }
+      set_unit_occupant: {
+        Args: {
+          p_full_name: string
+          p_phone?: string
+          p_relationship: string
+          p_start_date?: string
+          p_tc_kimlik?: string
+          p_unit_id: string
+          p_user_id?: string
+        }
+        Returns: string
+      }
+      switch_active_site: { Args: { p_site_id: string }; Returns: string }
+      sync_dues_payment_to_cari: {
+        Args: { p_payment_id: string }
+        Returns: string
+      }
+      tc_kimlik_exists: { Args: { p_tc: string }; Returns: boolean }
+      transfer_tenant_debt_to_owner: {
+        Args: { p_unit_id: string }
+        Returns: {
+          moved_amount: number
+          moved_count: number
+        }[]
+      }
+      transfer_unit_ownership: {
+        Args: {
+          p_effective_date?: string
+          p_move_owner_debt?: boolean
+          p_new_full_name: string
+          p_new_phone?: string
+          p_new_tc?: string
+          p_new_user_id?: string
+          p_unit_id: string
+        }
+        Returns: string
+      }
+      unwaive_accrual: { Args: { p_accrual_id: string }; Returns: undefined }
+      update_site_setting: {
+        Args: { p_key: string; p_site_id: string; p_value: boolean }
+        Returns: Json
+      }
       validate_site_code: {
         Args: { p_code: string }
         Returns: {
@@ -1500,53 +2246,11 @@ export type Database = {
           name: string
         }[]
       }
-      tc_kimlik_exists: { Args: { p_tc: string }; Returns: boolean }
       validate_tc_kimlik: { Args: { p_tc: string }; Returns: boolean }
-      set_unit_occupant: {
-        Args: {
-          p_unit_id: string
-          p_relationship: string
-          p_full_name: string
-          p_user_id?: string | null
-          p_phone?: string | null
-          p_tc_kimlik?: string | null
-          p_start_date?: string
-        }
-        Returns: string
-      }
-      transfer_unit_ownership: {
-        Args: {
-          p_unit_id: string
-          p_new_full_name: string
-          p_new_user_id?: string | null
-          p_new_phone?: string | null
-          p_new_tc?: string | null
-          p_move_owner_debt?: boolean
-          p_effective_date?: string
-        }
-        Returns: string
-      }
-      transfer_tenant_debt_to_owner: {
-        Args: { p_unit_id: string }
-        Returns: { moved_count: number; moved_amount: number }[]
-      }
-      end_tenancy: {
-        Args: { p_tenancy_id: string; p_end_date?: string }
-        Returns: undefined
-      }
       waive_accrual: {
-        Args: { p_accrual_id: string; p_reason?: string | null }
+        Args: { p_accrual_id: string; p_reason?: string }
         Returns: undefined
       }
-      unwaive_accrual: {
-        Args: { p_accrual_id: string }
-        Returns: undefined
-      }
-      is_valid_tc: { Args: { p_tc: string }; Returns: boolean }
-      bulk_import_units_residents: { Args: { p_rows: Json }; Returns: Json }
-      approve_bank_txn_as_collection: { Args: { p_txn_id: string; p_unit_id: string }; Returns: Json }
-      request_site_deletion: { Args: { p_reason: string }; Returns: Json }
-      cancel_site_deletion_request: { Args: { p_request_id: string }; Returns: Json }
     }
     Enums: {
       [_ in never]: never

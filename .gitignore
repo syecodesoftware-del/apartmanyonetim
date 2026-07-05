@@ -9,7 +9,10 @@
 /coverage
 
 # next.js
+/.next
 /.next/
+.next.nosync/
+node_modules.nosync/
 /out/
 
 # production
@@ -34,3 +37,4 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+.gstack/

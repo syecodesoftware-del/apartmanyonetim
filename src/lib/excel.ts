@@ -15,7 +15,7 @@ export type ImportUnit = {
 };
 
 export type ParsedRow = {
-  rowIndex: number; // Excel satır no (başlık hariç, 1'den)
+  rowIndex: number; // gerçek Excel satır no (1 = başlık; ilk veri satırı 2)
   block: string | null;
   apartment_number: string;
   floor: number | null;
@@ -53,12 +53,6 @@ function normRelationship(raw: string): 'malik' | 'kiraci' | null {
 }
 
 const s = (v: unknown): string => (v === null || v === undefined ? '' : String(v).trim());
-const numOrNull = (v: unknown): number | null => {
-  const t = s(v).replace(',', '.');
-  if (t === '') return null;
-  const n = Number(t);
-  return Number.isFinite(n) ? n : NaN as unknown as number;
-};
 
 /** Yüklenen Excel'i satır satır parse + doğrula, sonra daire bazında grupla. */
 export function parseImportWorkbook(data: ArrayBuffer): ParseResult {
@@ -88,7 +82,7 @@ export function parseImportWorkbook(data: ArrayBuffer): ParseResult {
     if (arsaRaw && !Number.isFinite(Number(arsaRaw.replace(',', '.')))) errors.push('Arsa Payı sayısal değil');
 
     return {
-      rowIndex: i + 1,
+      rowIndex: i + 2,
       block,
       apartment_number,
       floor: floorRaw ? Number(floorRaw) : null,
@@ -111,6 +105,12 @@ export function parseImportWorkbook(data: ArrayBuffer): ParseResult {
     if (!u) {
       u = { block: r.block, apartment_number: r.apartment_number, floor: r.floor, arsa_payi: r.arsa_payi, residents: [] };
       map.set(key, u);
+    } else {
+      // Aynı dairenin sonraki satırları: boş alan tamamlanır, dolu ve farklıysa hata (sessiz ilk-satır-kazanır yerine)
+      if (u.floor === null && r.floor !== null) u.floor = r.floor;
+      else if (r.floor !== null && u.floor !== null && r.floor !== u.floor) r.errors.push(`Kat çelişiyor (dairede ${u.floor}, bu satırda ${r.floor})`);
+      if (u.arsa_payi === null && r.arsa_payi !== null) u.arsa_payi = r.arsa_payi;
+      else if (r.arsa_payi !== null && u.arsa_payi !== null && r.arsa_payi !== u.arsa_payi) r.errors.push(`Arsa Payı çelişiyor (dairede ${u.arsa_payi}, bu satırda ${r.arsa_payi})`);
     }
     if (r.relationship) {
       u.residents.push({ relationship: r.relationship, full_name: r.full_name, tc_kimlik: r.tc_kimlik, phone: r.phone });

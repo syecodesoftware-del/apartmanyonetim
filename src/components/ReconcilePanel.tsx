@@ -8,6 +8,8 @@ import { Modal, Field, inputCls } from '@/components/UnitsPanel';
 import { Segmented } from '@/components/controls';
 import { useReadOnly } from '@/components/ReadOnly';
 import { money, date } from '@/lib/format';
+import { parseTrAmount, sanitizeAmountInput } from '@/lib/amount';
+import { todayLocalISO } from '@/lib/date';
 
 export type Summary = {
   defter_bakiye: number | null; banka_net: number | null;
@@ -18,7 +20,8 @@ export type Txn = {
   description: string | null; counterparty: string | null; bank_ref: string | null; match_status: string;
 };
 export type UnitOption = { id: string; block: string | null; apartment_number: string };
-type Candidate = { kind: 'collection' | 'expense'; id: string; amount: number; date: string | null; label: string };
+// needsAccountLink (P8): hesapsız online tahsilat — eşleşince collections.cash_account_id bu hesaba yazılır
+type Candidate = { kind: 'collection' | 'expense'; id: string; amount: number; date: string | null; label: string; needsAccountLink?: boolean };
 
 function unitLabel(u: UnitOption) {
   return [u.block, u.apartment_number].filter(Boolean).join(' / ');
@@ -43,10 +46,6 @@ const STATUS: Record<string, { label: string; tone: 'green' | 'amber' | 'slate' 
   ignored: { label: 'Yoksayıldı', tone: 'slate' },
 };
 
-function todayISO() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
 
 export function ReconcilePanel({ transactions, accountId, siteId, managerId, units = [] }: { transactions: Txn[]; accountId: string; siteId: string; managerId: string; units?: UnitOption[] }) {
   const router = useRouter();
@@ -81,7 +80,7 @@ export function ReconcilePanel({ transactions, accountId, siteId, managerId, uni
 
   // Hareket ekle
   const [addOpen, setAddOpen] = useState(false);
-  const [tDate, setTDate] = useState(todayISO());
+  const [tDate, setTDate] = useState(todayLocalISO());
   const [tDir, setTDir] = useState<'giris' | 'cikis'>('giris');
   const [tAmount, setTAmount] = useState('');
   const [tDesc, setTDesc] = useState('');
@@ -101,13 +100,13 @@ export function ReconcilePanel({ transactions, accountId, siteId, managerId, uni
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  function openAdd() { setTDate(todayISO()); setTDir('giris'); setTAmount(''); setTDesc(''); setTParty(''); setTRef(''); setError(null); setAddOpen(true); }
+  function openAdd() { setTDate(todayLocalISO()); setTDir('giris'); setTAmount(''); setTDesc(''); setTParty(''); setTRef(''); setError(null); setAddOpen(true); }
 
   async function addTxn(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    const amt = Number(tAmount);
-    if (!amt || amt <= 0) { setError('Geçerli bir tutar giriniz.'); return; }
+    const amt = parseTrAmount(tAmount);
+    if (!Number.isFinite(amt) || amt <= 0) { setError('Geçerli bir tutar giriniz (örn. 750 veya 1.234,50).'); return; }
     setBusy(true);
     const { error } = await sb.from('bank_transactions').insert({
       site_id: siteId, cash_account_id: accountId, txn_date: tDate, direction: tDir, amount: amt,
@@ -130,8 +129,8 @@ export function ReconcilePanel({ transactions, accountId, siteId, managerId, uni
       if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) { bad.push(i + 1); continue; }
       const dir = /^(g|giris|giriş|\+)$/i.test(y) ? 'giris' : /^(c|cikis|çıkış|cıkıs|-)$/i.test(y) ? 'cikis' : null;
       if (!dir) { bad.push(i + 1); continue; }
-      const amount = a.includes(',') ? Number(a.replace(/\./g, '').replace(',', '.')) : Number(a);
-      if (!amount || isNaN(amount) || amount <= 0) { bad.push(i + 1); continue; }
+      const amount = parseTrAmount(a);
+      if (!Number.isFinite(amount) || amount <= 0) { bad.push(i + 1); continue; }
       const { error } = await sb.from('bank_transactions').insert({
         site_id: siteId, cash_account_id: accountId, txn_date: d, direction: dir, amount,
         description: desc?.trim() || null, bank_ref: ref?.trim() || null, created_by: managerId,
@@ -147,8 +146,16 @@ export function ReconcilePanel({ transactions, accountId, siteId, managerId, uni
     setMatchTxn(t); setCandLoading(true); setCandidates([]);
     const dir = t.direction;
     if (dir === 'giris') {
-      const { data } = await sb.from('collections').select('id, amount, paid_at, method').eq('cash_account_id', accountId).order('paid_at', { ascending: false }).limit(100);
-      setCandidates((data ?? []).map((c) => ({ kind: 'collection', id: c.id, amount: c.amount, date: c.paid_at, label: `Tahsilat · ${c.method}` })));
+      // P8: bu hesaptakiler + sitenin hesapsız online tahsilatları (PayTR vb. bankaya düşer ama defterde hesapsız durur)
+      const { data } = await sb.from('collections').select('id, amount, paid_at, method, cash_account_id')
+        .eq('site_id', siteId)
+        .or(`cash_account_id.eq.${accountId},and(cash_account_id.is.null,method.eq.online)`)
+        .order('paid_at', { ascending: false }).limit(100);
+      setCandidates((data ?? []).map((c) => ({
+        kind: 'collection', id: c.id, amount: c.amount, date: c.paid_at,
+        label: c.cash_account_id ? `Tahsilat · ${c.method}` : 'Online tahsilat · eşleşince bu hesaba bağlanır',
+        needsAccountLink: !c.cash_account_id,
+      })));
     } else {
       const { data } = await sb.from('cash_expenses').select('id, amount, spent_at, category, description').eq('cash_account_id', accountId).order('spent_at', { ascending: false }).limit(100);
       setCandidates((data ?? []).map((e) => ({ kind: 'expense', id: e.id, amount: e.amount, date: e.spent_at, label: e.description || e.category || 'Gider' })));
@@ -158,25 +165,45 @@ export function ReconcilePanel({ transactions, accountId, siteId, managerId, uni
 
   async function applyMatch(c: Candidate) {
     if (!matchTxn) return;
+    // P8: hesapsız online tahsilat bu banka hesabına bağlanır (kasa bakiyesine artık dahil olur)
+    if (c.kind === 'collection' && c.needsAccountLink) {
+      const { error: cErr } = await sb.from('collections').update({ cash_account_id: accountId }).eq('id', c.id).eq('method', 'online');
+      if (cErr) { alert('Eşleştirilemedi: ' + cErr.message); return; }
+    }
     const patch = c.kind === 'collection'
       ? { match_status: 'matched', matched_collection_id: c.id, matched_expense_id: null }
       : { match_status: 'matched', matched_expense_id: c.id, matched_collection_id: null };
     const { error } = await sb.from('bank_transactions').update(patch).eq('id', matchTxn.id);
-    if (error) { alert('Eşleştirilemedi: ' + error.message); return; }
+    if (error) {
+      if (c.kind === 'collection' && c.needsAccountLink) {
+        await sb.from('collections').update({ cash_account_id: null }).eq('id', c.id).eq('method', 'online');
+      }
+      alert('Eşleştirilemedi: ' + error.message); return;
+    }
     setMatchTxn(null);
     router.refresh();
   }
 
+  // Eşleşmiş online tahsilatın hesabını geri al (record_collection ile hesap alan banka/nakit tahsilatlarına dokunmaz)
+  async function unlinkOnlineCollection(collectionId: string | null) {
+    if (!collectionId) return;
+    await sb.from('collections').update({ cash_account_id: null }).eq('id', collectionId).eq('method', 'online');
+  }
+
   async function setStatus(t: Txn, status: 'unmatched' | 'ignored') {
+    const { data: prev } = await sb.from('bank_transactions').select('matched_collection_id').eq('id', t.id).maybeSingle();
     const { error } = await sb.from('bank_transactions').update({ match_status: status, matched_collection_id: null, matched_expense_id: null }).eq('id', t.id);
     if (error) { alert('Güncellenemedi: ' + error.message); return; }
+    await unlinkOnlineCollection(prev?.matched_collection_id ?? null); // P8 geri alma
     router.refresh();
   }
 
   async function deleteTxn(t: Txn) {
-    if (!confirm('Bu ekstre satırı silinsin mi? (Tahsilat/gider etkilenmez.)')) return;
+    if (!confirm('Bu ekstre satırı silinsin mi? (Tahsilat/gider kaydı silinmez; eşleşmiş online tahsilatın hesap bağı geri alınır.)')) return;
+    const { data: prev } = await sb.from('bank_transactions').select('matched_collection_id').eq('id', t.id).maybeSingle();
     const { error } = await sb.from('bank_transactions').delete().eq('id', t.id);
     if (error) { alert('Silinemedi: ' + error.message); return; }
+    await unlinkOnlineCollection(prev?.matched_collection_id ?? null); // P8 geri alma
     router.refresh();
   }
 
@@ -238,7 +265,7 @@ export function ReconcilePanel({ transactions, accountId, siteId, managerId, uni
           <form onSubmit={addTxn} className="space-y-3">
             <Field label="Tarih"><input type="date" value={tDate} onChange={(e) => setTDate(e.target.value)} className={inputCls} /></Field>
             <Field label="Yön"><Segmented value={tDir} onChange={setTDir} options={[{ value: 'giris', label: 'Giriş (+)' }, { value: 'cikis', label: 'Çıkış (−)' }]} /></Field>
-            <Field label="Tutar (₺) *"><input value={tAmount} onChange={(e) => setTAmount(e.target.value.replace(/[^0-9.]/g, ''))} inputMode="decimal" className={inputCls} /></Field>
+            <Field label="Tutar (₺) *"><input value={tAmount} onChange={(e) => setTAmount(sanitizeAmountInput(e.target.value))} inputMode="decimal" placeholder="örn. 750 veya 1.234,50" className={inputCls} /></Field>
             <Field label="Açıklama"><input value={tDesc} onChange={(e) => setTDesc(e.target.value)} className={inputCls} /></Field>
             <Field label="Karşı Taraf"><input value={tParty} onChange={(e) => setTParty(e.target.value)} className={inputCls} /></Field>
             <Field label="Banka Referansı"><input value={tRef} onChange={(e) => setTRef(e.target.value)} placeholder="Mükerrer eklemeyi önler" className={inputCls} /></Field>

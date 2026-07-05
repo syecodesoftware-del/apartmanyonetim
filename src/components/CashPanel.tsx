@@ -9,6 +9,8 @@ import { Modal, Field, inputCls } from '@/components/UnitsPanel';
 import { Segmented } from '@/components/controls';
 import { useReadOnly } from '@/components/ReadOnly';
 import { money, date } from '@/lib/format';
+import { parseTrAmount, sanitizeAmountInput } from '@/lib/amount';
+import { todayLocalISO } from '@/lib/date';
 
 export type AccountBalance = {
   cash_account_id: string | null;
@@ -29,10 +31,6 @@ export type Movement = {
 
 const CATEGORIES = ['Temizlik', 'Tamir', 'Elektrik', 'Su', 'Asansör', 'Bahçe', 'Personel', 'Diğer'];
 
-function todayISO() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
 
 export function CashPanel({ balances, movements, siteId, managerId }: { balances: AccountBalance[]; movements: Movement[]; siteId: string; managerId: string }) {
   const router = useRouter();
@@ -53,7 +51,7 @@ export function CashPanel({ balances, movements, siteId, managerId }: { balances
   const [expAmount, setExpAmount] = useState('');
   const [expCategory, setExpCategory] = useState('');
   const [expDesc, setExpDesc] = useState('');
-  const [expDate, setExpDate] = useState(todayISO());
+  const [expDate, setExpDate] = useState(todayLocalISO());
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -64,8 +62,8 @@ export function CashPanel({ balances, movements, siteId, managerId }: { balances
     e.preventDefault();
     setError(null);
     if (!accAd.trim()) { setError('Hesap adı zorunludur.'); return; }
-    const opening = accOpening.trim() ? Number(accOpening) : 0;
-    if (isNaN(opening)) { setError('Geçerli bir açılış bakiyesi giriniz.'); return; }
+    const opening = accOpening.trim() ? parseTrAmount(accOpening) : 0;
+    if (!Number.isFinite(opening)) { setError('Geçerli bir açılış bakiyesi giriniz (örn. 1.234,50).'); return; }
     setBusy(true);
     const { error } = await supabaseBrowser().from('cash_accounts').insert({
       site_id: siteId, ad: accAd.trim(), tur: accTur,
@@ -79,7 +77,7 @@ export function CashPanel({ balances, movements, siteId, managerId }: { balances
   }
 
   function openNewExpense() {
-    setEditingId(null); setExpAccount(balances[0]?.cash_account_id ?? ''); setExpAmount(''); setExpCategory(''); setExpDesc(''); setExpDate(todayISO()); setError(null); setExpOpen(true);
+    setEditingId(null); setExpAccount(balances[0]?.cash_account_id ?? ''); setExpAmount(''); setExpCategory(''); setExpDesc(''); setExpDate(todayLocalISO()); setError(null); setExpOpen(true);
   }
 
   async function openEditExpense(m: Movement) {
@@ -99,8 +97,8 @@ export function CashPanel({ balances, movements, siteId, managerId }: { balances
     e.preventDefault();
     setError(null);
     if (!editingId && !expAccount) { setError('Kasa seçiniz.'); return; }
-    const amt = Number(expAmount);
-    if (!amt || amt <= 0) { setError('Geçerli bir tutar giriniz.'); return; }
+    const amt = parseTrAmount(expAmount);
+    if (!Number.isFinite(amt) || amt <= 0) { setError('Geçerli bir tutar giriniz (örn. 750 veya 1.234,50).'); return; }
     setBusy(true);
     const sb = supabaseBrowser();
     const { error } = editingId
@@ -195,7 +193,7 @@ export function CashPanel({ balances, movements, siteId, managerId }: { balances
             <Field label="Hesap Adı *"><input value={accAd} onChange={(e) => setAccAd(e.target.value)} autoFocus className={inputCls} /></Field>
             <Field label="Tür"><Segmented value={accTur} onChange={setAccTur} options={[{ value: 'nakit', label: 'Nakit' }, { value: 'banka', label: 'Banka' }]} /></Field>
             {accTur === 'banka' && <Field label="IBAN"><input value={accIban} onChange={(e) => setAccIban(e.target.value)} className={inputCls} /></Field>}
-            <Field label="Açılış Bakiyesi (₺)"><input value={accOpening} onChange={(e) => setAccOpening(e.target.value.replace(/[^0-9.-]/g, ''))} inputMode="decimal" className={inputCls} /></Field>
+            <Field label="Açılış Bakiyesi (₺)"><input value={accOpening} onChange={(e) => setAccOpening(sanitizeAmountInput(e.target.value, true))} inputMode="decimal" className={inputCls} /></Field>
             {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>}
             <div className="flex justify-end gap-2 pt-1">
               <button type="button" onClick={() => setAccOpen(false)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50">Vazgeç</button>
@@ -214,7 +212,7 @@ export function CashPanel({ balances, movements, siteId, managerId }: { balances
                 {balances.map((b) => <option key={b.cash_account_id} value={b.cash_account_id ?? ''}>{b.ad}</option>)}
               </select>
             </Field>
-            <Field label="Tutar (₺) *"><input value={expAmount} onChange={(e) => setExpAmount(e.target.value.replace(/[^0-9.]/g, ''))} inputMode="decimal" autoFocus className={inputCls} /></Field>
+            <Field label="Tutar (₺) *"><input value={expAmount} onChange={(e) => setExpAmount(sanitizeAmountInput(e.target.value))} inputMode="decimal" autoFocus placeholder="örn. 750 veya 1.234,50" className={inputCls} /></Field>
             <Field label="Kategori">
               <div className="mb-2 flex flex-wrap gap-1.5">
                 {CATEGORIES.map((c) => (

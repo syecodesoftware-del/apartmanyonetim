@@ -24,8 +24,9 @@ export default async function CashReport({ searchParams }: { searchParams: Promi
   ]);
 
   const inflow = new Map<string, number>();
+  let unassignedIn = 0; // hesaba (kasa/banka) bağlanmamış tahsilatlar — ör. online/QR
   for (const c of collections ?? []) {
-    if (!c.cash_account_id) continue;
+    if (!c.cash_account_id) { unassignedIn += Number(c.amount ?? 0); continue; }
     inflow.set(c.cash_account_id, (inflow.get(c.cash_account_id) ?? 0) + Number(c.amount ?? 0));
   }
   const outflow = new Map<string, number>();
@@ -42,15 +43,22 @@ export default async function CashReport({ searchParams }: { searchParams: Promi
   })).sort((a, b) => Number(b.balance ?? 0) - Number(a.balance ?? 0));
 
   const totalBalance = accounts.reduce((s, a) => s + Number(a.balance ?? 0), 0);
-  const totalIn = accounts.reduce((s, a) => s + a.inflow, 0);
+  const accountIn = accounts.reduce((s, a) => s + a.inflow, 0);
+  const totalIn = accountIn + unassignedIn; // Gelir–Gider "Toplam Gelir" ile uzlaşır
   const totalOut = accounts.reduce((s, a) => s + a.outflow, 0);
 
   const sheets: ExportSheet[] = [
-    { name: 'Hesap Durumu', rows: accounts.map((a) => ({
-      'Hesap': a.label, 'Tür': TUR_LABEL[a.tur ?? ''] ?? a.tur, 'Aktif': a.is_active ? 'Evet' : 'Hayır',
-      'Dönem Giriş': a.inflow, 'Dönem Çıkış': a.outflow, 'Güncel Bakiye': Number(a.balance ?? 0),
-    })) },
-    { name: 'Özet', rows: [{ 'Başlangıç': from, 'Bitiş': to, 'Toplam Giriş': totalIn, 'Toplam Çıkış': totalOut, 'Toplam Bakiye': totalBalance }] },
+    { name: 'Hesap Durumu', rows: [
+      ...accounts.map((a) => ({
+        'Hesap': a.label, 'Tür': TUR_LABEL[a.tur ?? ''] ?? a.tur, 'Aktif': a.is_active ? 'Evet' : 'Hayır',
+        'Dönem Giriş': a.inflow, 'Dönem Çıkış': a.outflow, 'Güncel Bakiye': Number(a.balance ?? 0),
+      })),
+      ...(unassignedIn > 0.005 ? [{
+        'Hesap': 'Hesaba bağlanmamış', 'Tür': '—', 'Aktif': '—',
+        'Dönem Giriş': unassignedIn, 'Dönem Çıkış': 0, 'Güncel Bakiye': 0,
+      }] : []),
+    ] },
+    { name: 'Özet', rows: [{ 'Başlangıç': from, 'Bitiş': to, 'Toplam Giriş': totalIn, 'Hesap Girişi': accountIn, 'Hesaba Bağlanmamış': unassignedIn, 'Toplam Çıkış': totalOut, 'Toplam Bakiye': totalBalance }] },
   ];
 
   return (
@@ -59,7 +67,7 @@ export default async function CashReport({ searchParams }: { searchParams: Promi
       <ReportControls from={from} to={to} sheets={sheets} fileName={`kasa-banka-${from}_${to}.xlsx`} />
 
       <div className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <StatCard label="Dönem Giriş" value={money(totalIn, true)} tone="success" icon="⬇️" />
+        <StatCard label="Dönem Giriş" value={money(totalIn, true)} hint={unassignedIn > 0.005 ? `${money(unassignedIn, true)} hesaba bağlanmamış` : undefined} tone="success" icon="⬇️" />
         <StatCard label="Dönem Çıkış" value={money(totalOut, true)} tone="danger" icon="⬆️" />
         <StatCard label="Toplam Bakiye" value={money(totalBalance, true)} icon="🏦" />
       </div>
@@ -78,8 +86,23 @@ export default async function CashReport({ searchParams }: { searchParams: Promi
                   <Td className="text-right font-semibold text-slate-800">{money(Number(a.balance ?? 0), true)}</Td>
                 </tr>
               ))}
+              {unassignedIn > 0.005 && (
+                <tr className="border-l-2 border-amber-400 bg-amber-50/40">
+                  <Td className="font-medium text-amber-700">Hesaba bağlanmamış <Badge tone="amber">online/QR</Badge></Td>
+                  <Td className="text-slate-400">—</Td>
+                  <Td className="text-right font-semibold text-emerald-600">{money(unassignedIn, true)}</Td>
+                  <Td className="text-right text-slate-400">—</Td>
+                  <Td className="text-right text-slate-400">—</Td>
+                </tr>
+              )}
             </tbody>
           </Table>
+        )}
+        {unassignedIn > 0.005 && (
+          <p className="mt-3 text-xs text-amber-600">
+            ⚠ {money(unassignedIn, true)} tutarındaki tahsilat bir kasa/banka hesabına bağlanmamış (ör. online/QR). Bu tutar
+            “Dönem Giriş” toplamına dahildir ancak hiçbir hesap bakiyesine yansımaz — bir hesaba eşleştirmeniz önerilir.
+          </p>
         )}
       </Card>
     </>

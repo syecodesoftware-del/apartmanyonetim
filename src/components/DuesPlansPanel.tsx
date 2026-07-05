@@ -8,6 +8,7 @@ import { Field, inputCls } from '@/components/UnitsPanel';
 import { Toggle } from '@/components/controls';
 import { useReadOnly } from '@/components/ReadOnly';
 import { money } from '@/lib/format';
+import { parseTrAmount, sanitizeAmountInput } from '@/lib/amount';
 
 export type DuesPlanRow = {
   id: string;
@@ -32,13 +33,14 @@ export function DuesPlansPanel({ plans, siteId, managerId }: { plans: DuesPlanRo
     e.preventDefault();
     setError(null);
     if (!name.trim()) { setError('Plan adı zorunludur.'); return; }
-    const amt = Number(amount);
-    if (!amt || amt <= 0) { setError('Geçerli bir tutar giriniz.'); return; }
+    const amt = parseTrAmount(amount);
+    if (!Number.isFinite(amt) || amt <= 0) { setError('Geçerli bir tutar giriniz (örn. 500 veya 1.234,50).'); return; }
     const day = Number(dueDay);
+    if (!Number.isInteger(day) || day < 1 || day > 28) { setError('Son ödeme günü 1-28 arasında olmalıdır.'); return; }
     setSaving(true);
     const { error } = await supabaseBrowser().from('dues_plans').insert({
       site_id: siteId, name: name.trim(), amount: amt,
-      due_day: day >= 1 && day <= 28 ? day : 1,
+      due_day: day,
       description: description.trim() || null, created_by: managerId,
     });
     setSaving(false);
@@ -61,9 +63,10 @@ export function DuesPlansPanel({ plans, siteId, managerId }: { plans: DuesPlanRo
         </Card>
       ) : (
       <Card title="Yeni Plan" className="lg:col-span-1">
+        <p className="mb-3 text-xs text-slate-500">Aylık aidat tutarı ayarıdır: her ayın 1&apos;inde otomatik tahakkuk bu tutardan üretilir. Mevcut borçlar Cari &amp; Bakiyeler&apos;den yönetilir.</p>
         <form onSubmit={create} className="space-y-3">
           <Field label="Plan Adı *"><input value={name} onChange={(e) => setName(e.target.value)} placeholder="Aylık Aidat 2026" className={inputCls} /></Field>
-          <Field label="Tutar (₺) *"><input value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))} inputMode="decimal" className={inputCls} /></Field>
+          <Field label="Tutar (₺) *"><input value={amount} onChange={(e) => setAmount(sanitizeAmountInput(e.target.value))} inputMode="decimal" placeholder="örn. 500 veya 1.234,50" className={inputCls} /></Field>
           <Field label="Son Ödeme Günü (1-28)"><input value={dueDay} onChange={(e) => setDueDay(e.target.value.replace(/\D/g, ''))} inputMode="numeric" maxLength={2} className={inputCls} /></Field>
           <Field label="Açıklama"><textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} className={inputCls} /></Field>
           {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>}

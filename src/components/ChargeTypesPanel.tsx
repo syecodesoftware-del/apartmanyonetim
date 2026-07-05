@@ -60,9 +60,9 @@ export function ChargeTypesPanel({ chargeTypes, siteId }: { chargeTypes: ChargeT
 
   return (
     <>
-      <Card title="Gider Türleri" action={ro ? undefined : <button onClick={openNew} className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-blue-700">+ Tür</button>}>
+      <Card title="Tahakkuk Türleri" action={ro ? undefined : <button onClick={openNew} className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-blue-700">+ Tür</button>}>
         {chargeTypes.length === 0 ? (
-          <EmptyState>Henüz gider türü yok. Örnek: “Aidat”, “Yakıt”.</EmptyState>
+          <EmptyState>Henüz tahakkuk türü yok. Örnek: “Aidat”, “Yakıt”.</EmptyState>
         ) : (
           <Table>
             <thead>
@@ -88,7 +88,7 @@ export function ChargeTypesPanel({ chargeTypes, siteId }: { chargeTypes: ChargeT
       </Card>
 
       {open && (
-        <Modal title={editId ? 'Türü Düzenle' : 'Yeni Gider Türü'} onClose={() => setOpen(false)}>
+        <Modal title={editId ? 'Türü Düzenle' : 'Yeni Tahakkuk Türü'} onClose={() => setOpen(false)}>
           <form onSubmit={save} className="space-y-3">
             <Field label="Ad (ör. Aidat, Yakıt)"><input value={form.ad} onChange={(e) => setForm((f) => ({ ...f, ad: e.target.value }))} autoFocus className={inputCls} /></Field>
             <Field label="Borç hedefi">

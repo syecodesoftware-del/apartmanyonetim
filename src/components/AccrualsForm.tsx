@@ -7,6 +7,8 @@ import { Card } from '@/components/ui';
 import { inputCls, Modal, Field } from '@/components/UnitsPanel';
 import { Segmented, Toggle } from '@/components/controls';
 import { useReadOnly } from '@/components/ReadOnly';
+import { parseTrAmount, sanitizeAmountInput } from '@/lib/amount';
+import { friendlyDbMessage } from '@/lib/error';
 
 export type ChargeOption = { id: string; ad: string; is_active: boolean };
 type Distribution = 'arsa_payi' | 'esit';
@@ -14,14 +16,13 @@ const DIST: { value: Distribution; label: string }[] = [
   { value: 'arsa_payi', label: 'Arsa payı' },
   { value: 'esit', label: 'Eşit' },
 ];
-const now = new Date();
-
 export function AccrualsForm({ chargeTypes, siteId }: { chargeTypes: ChargeOption[]; siteId: string }) {
   const router = useRouter();
   const ro = useReadOnly();
   const [chargeTypeId, setChargeTypeId] = useState<string | null>(chargeTypes[0]?.id ?? null);
-  const [month, setMonth] = useState(String(now.getMonth() + 1));
-  const [year, setYear] = useState(String(now.getFullYear()));
+  // O6: modül-seviyesi new Date() ilk import anında donuyordu; ay/yıl her açılışta hesaplanır
+  const [month, setMonth] = useState(() => String(new Date().getMonth() + 1));
+  const [year, setYear] = useState(() => String(new Date().getFullYear()));
   const [dueDate, setDueDate] = useState('');
   const [amount, setAmount] = useState('');
   const [distribution, setDistribution] = useState<Distribution>('arsa_payi');
@@ -29,7 +30,7 @@ export function AccrualsForm({ chargeTypes, siteId }: { chargeTypes: ChargeOptio
   const [result, setResult] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  // Yeni gider türü modalı
+  // Yeni tahakkuk türü modalı
   const [ctOpen, setCtOpen] = useState(false);
   const [ctName, setCtName] = useState('');
   const [ctTarget, setCtTarget] = useState<'malik' | 'kiraci'>('kiraci');
@@ -56,8 +57,11 @@ export function AccrualsForm({ chargeTypes, siteId }: { chargeTypes: ChargeOptio
     setError(''); setResult(null);
     if (!chargeTypeId) { setError('Gider türü seçiniz.'); return; }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) { setError('Vade tarihini seçiniz.'); return; }
-    const amt = Number(amount);
-    if (!amt || amt <= 0) { setError('Geçerli bir tutar giriniz.'); return; }
+    const m = Number(month), y = Number(year);
+    if (!Number.isInteger(m) || m < 1 || m > 12) { setError('Ay 1-12 arasında olmalı.'); return; }
+    if (!Number.isInteger(y) || y < 2020 || y > 2100) { setError('Geçerli bir yıl giriniz.'); return; }
+    const amt = parseTrAmount(amount);
+    if (!Number.isFinite(amt) || amt <= 0) { setError('Geçerli bir tutar giriniz (örn. 750 veya 1.234,50).'); return; }
     setBusy(true);
     const { data, error } = await supabaseBrowser().rpc('generate_accruals', {
       p_site_id: siteId, p_charge_type_id: chargeTypeId,
@@ -65,7 +69,7 @@ export function AccrualsForm({ chargeTypes, siteId }: { chargeTypes: ChargeOptio
       p_due_date: dueDate, p_amount: amt, p_distribution: distribution,
     });
     setBusy(false);
-    if (error) { setError(error.message.replace(/^.*?:\s*/, '')); return; }
+    if (error) { setError(friendlyDbMessage(error.message)); return; }
     setResult(`${data ?? 0} daireye borç tahakkuk ettirildi.`);
   }
 
@@ -84,7 +88,7 @@ export function AccrualsForm({ chargeTypes, siteId }: { chargeTypes: ChargeOptio
       <Card>
         <form onSubmit={generate} className="space-y-4">
           <div>
-            <p className="mb-1 text-xs font-medium text-slate-600">Gider Türü</p>
+            <p className="mb-1 text-xs font-medium text-slate-600">Tahakkuk Türü</p>
             <div className="flex flex-wrap gap-2">
               {chargeTypes.map((ct) => (
                 <button
@@ -100,7 +104,7 @@ export function AccrualsForm({ chargeTypes, siteId }: { chargeTypes: ChargeOptio
               ))}
               <button type="button" onClick={() => setCtOpen(true)} className="rounded-full border border-dashed border-blue-400 px-3 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50">+ Yeni Tür</button>
             </div>
-            {chargeTypes.length === 0 && <p className="mt-1 text-xs text-amber-600">Önce bir gider türü ekleyin (ör. “Aidat”).</p>}
+            {chargeTypes.length === 0 && <p className="mt-1 text-xs text-amber-600">Önce bir tahakkuk türü ekleyin (ör. “Aidat”).</p>}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -109,7 +113,7 @@ export function AccrualsForm({ chargeTypes, siteId }: { chargeTypes: ChargeOptio
           </div>
 
           <Field label="Son Ödeme Tarihi (vade)"><input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className={inputCls} /></Field>
-          <Field label="Toplam Tutar (₺)"><input value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))} inputMode="decimal" placeholder="Sabit modda: daire başı tutar" className={inputCls} /></Field>
+          <Field label="Toplam Tutar (₺)"><input value={amount} onChange={(e) => setAmount(sanitizeAmountInput(e.target.value))} inputMode="decimal" placeholder="örn. 750 veya 1.234,50" className={inputCls} /></Field>
 
           <div>
             <p className="mb-1 text-xs font-medium text-slate-600">Dağıtım Anahtarı</p>
@@ -130,7 +134,7 @@ export function AccrualsForm({ chargeTypes, siteId }: { chargeTypes: ChargeOptio
       </Card>
 
       {ctOpen && (
-        <Modal title="Yeni Gider Türü" onClose={() => setCtOpen(false)}>
+        <Modal title="Yeni Tahakkuk Türü" onClose={() => setCtOpen(false)}>
           <form onSubmit={createCt} className="space-y-3">
             <Field label="Ad (ör. Aidat, Yakıt)"><input value={ctName} onChange={(e) => setCtName(e.target.value)} autoFocus className={inputCls} /></Field>
             <Field label="Borç hedefi"><Segmented value={ctTarget} onChange={setCtTarget} options={[{ value: 'kiraci', label: 'Kiracı' }, { value: 'malik', label: 'Malik' }]} /></Field>

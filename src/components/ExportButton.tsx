@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { supabaseBrowser } from '@/lib/supabaseBrowser';
 import { buildExportBlob, downloadBlob } from '@/lib/excel';
+import { todayLocalISO } from '@/lib/date';
 
 /** Modül 4 — Tüm site verisini çok-sheet'li Excel olarak dışa aktarır.
  *  RLS sayesinde yalnız kendi sitenin verisi gelir; denetçi de kullanabilir (okuma). */
@@ -43,10 +44,10 @@ export function ExportButton({ siteId }: { siteId: string }) {
         { name: 'Banka Hareketleri', rows: (bank.data ?? []).map((r) => ({ 'Tarih': fmtDate(r.txn_date), 'Yön': r.direction === 'in' ? 'Giriş' : 'Çıkış', 'Tutar': r.amount ?? 0, 'Açıklama': r.description ?? '', 'Karşı Taraf': r.counterparty ?? '', 'Eşleşme': r.match_status ?? '' })) },
         { name: 'Duyurular', rows: (announcements.data ?? []).map((r) => ({ 'Başlık': r.title, 'İçerik': r.content ?? '', 'Öncelik': r.priority ?? '', 'Sabit': r.is_pinned ? 'Evet' : 'Hayır', 'Geçerlilik': fmtDate(r.valid_until), 'Oluşturulma': fmtDateTime(r.created_at) })) },
         { name: 'Şikayetler', rows: (complaints.data ?? []).map((r) => ({ 'Kategori': r.category ?? '', 'Başlık': r.title, 'Açıklama': r.description ?? '', 'Durum': r.status ?? '', 'Öncelik': r.priority ?? '', 'Oluşturulma': fmtDateTime(r.created_at), 'Çözüm': r.resolved_at ? fmtDateTime(r.resolved_at) : '' })) },
-        { name: 'Gider Türleri', rows: (chargeTypes.data ?? []).map((r) => ({ 'Ad': r.ad, 'Borç Hedefi': r.borc_hedefi === 'malik' ? 'Malik' : 'Kiracı', 'Gecikme Uygula': r.gecikme_uygula ? 'Evet' : 'Hayır', 'Aktif': r.is_active ? 'Evet' : 'Hayır' })) },
+        { name: 'Tahakkuk Türleri', rows: (chargeTypes.data ?? []).map((r) => ({ 'Ad': r.ad, 'Borç Hedefi': r.borc_hedefi === 'malik' ? 'Malik' : 'Kiracı', 'Gecikme Uygula': r.gecikme_uygula ? 'Evet' : 'Hayır', 'Aktif': r.is_active ? 'Evet' : 'Hayır' })) },
       ];
 
-      const stamp = new Date().toISOString().slice(0, 10);
+      const stamp = todayLocalISO();
       downloadBlob(buildExportBlob(sheets), `komsu-asistani-veri-${stamp}.xlsx`);
     } catch (err) {
       setError('Dışa aktarma başarısız: ' + (err as Error).message);

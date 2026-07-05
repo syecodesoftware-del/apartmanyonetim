@@ -6,13 +6,13 @@ import { checkRateLimit, clearRateLimit } from '@/lib/rateLimit';
 
 export type LoginState = { error?: string };
 
-/** E-posta/şifre ile giriş; yalnız role manager/admin kullanıcılar kabul edilir. */
+/** E-posta/şifre ile giriş; yalnız role manager/admin/auditor kullanıcılar kabul edilir (auditor salt-okunur — session.ts STAFF_ROLES ile uyumlu). */
 export async function login(_prev: LoginState, formData: FormData): Promise<LoginState> {
   const email = String(formData.get('email') ?? '').trim();
   const password = String(formData.get('password') ?? '');
   if (!email || !password) return { error: 'E-posta ve şifre gerekli.' };
 
-  if (!checkRateLimit(`login:${email.toLowerCase()}`)) {
+  if (!(await checkRateLimit(`login:${email.toLowerCase()}`))) {
     return { error: 'Çok fazla deneme. Lütfen birkaç dakika sonra tekrar deneyin.' };
   }
 
@@ -27,7 +27,7 @@ export async function login(_prev: LoginState, formData: FormData): Promise<Logi
     .eq('id', data.user.id)
     .single();
 
-  if (!profile || (profile.role !== 'manager' && profile.role !== 'admin')) {
+  if (!profile || !['manager', 'admin', 'auditor'].includes(profile.role ?? '')) {
     await sb.auth.signOut();
     return { error: 'Bu hesabın yönetici paneline erişim yetkisi yok.' };
   }
@@ -36,7 +36,7 @@ export async function login(_prev: LoginState, formData: FormData): Promise<Logi
     return { error: 'Hesabınıza atanmış aktif bir site yok.' };
   }
 
-  clearRateLimit(`login:${email.toLowerCase()}`);
+  await clearRateLimit(`login:${email.toLowerCase()}`);
   redirect('/');
 }
 

@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { supabaseBrowser } from '@/lib/supabaseBrowser';
 import { Card, Table, Th, Td, EmptyState, Badge } from '@/components/ui';
 import { useReadOnly } from '@/components/ReadOnly';
+import { parseTrDecimal, sanitizeAmountInput } from '@/lib/amount';
 
 export type UnitRow = {
   id: string;
@@ -51,12 +52,18 @@ export function UnitsPanel({ units, blockOptions, siteId }: { units: UnitRow[]; 
     e.preventDefault();
     setError(null);
     if (!form.apartment_number.trim()) { setError('Daire no zorunludur.'); return; }
+    const floorNum = form.floor.trim() ? Number(form.floor) : null;
+    if (floorNum !== null && !Number.isInteger(floorNum)) { setError('Kat tam sayı olmalıdır.'); return; }
+    const arsaNum = form.arsa_payi.trim() ? parseTrDecimal(form.arsa_payi) : null;
+    if (arsaNum !== null && (!Number.isFinite(arsaNum) || arsaNum < 0)) { setError('Geçerli bir arsa payı giriniz (örn. 0,0125).'); return; }
+    const m2Num = form.m2.trim() ? parseTrDecimal(form.m2) : null;
+    if (m2Num !== null && (!Number.isFinite(m2Num) || m2Num <= 0)) { setError('Geçerli bir m² giriniz (örn. 120 veya 95,5).'); return; }
     const payload = {
       block: form.block.trim() || null,
       apartment_number: form.apartment_number.trim(),
-      floor: form.floor.trim() ? Number(form.floor) : null,
-      arsa_payi: form.arsa_payi.trim() ? Number(form.arsa_payi) : null,
-      m2: form.m2.trim() ? Number(form.m2) : null,
+      floor: floorNum,
+      arsa_payi: arsaNum,
+      m2: m2Num,
       ada_id: form.ada_id || null,
     };
     setSaving(true);
@@ -121,7 +128,7 @@ export function UnitsPanel({ units, blockOptions, siteId }: { units: UnitRow[]; 
             </div>
             <div className="grid grid-cols-2 gap-2">
               <Field label="Kat"><input value={form.floor} onChange={(e) => set('floor', e.target.value)} inputMode="numeric" className={inputCls} /></Field>
-              <Field label="Arsa Payı"><input value={form.arsa_payi} onChange={(e) => set('arsa_payi', e.target.value)} inputMode="decimal" className={inputCls} /></Field>
+              <Field label="Arsa Payı"><input value={form.arsa_payi} onChange={(e) => set('arsa_payi', sanitizeAmountInput(e.target.value))} inputMode="decimal" placeholder="örn. 0,0125" className={inputCls} /></Field>
             </div>
             <Field label="Ada / Blok grubu">
               <select value={form.ada_id} onChange={(e) => set('ada_id', e.target.value)} className={inputCls}>

@@ -41,13 +41,13 @@ export function UnpaidList({ unpaid, siteId }: { unpaid: UnpaidRow[]; siteId: st
   const total = periods.reduce((s, p) => s + p.amount, 0);
 
   if (unpaid.length === 0) {
-    return <Card><EmptyState>Bu ay herkes ödedi 🎉</EmptyState></Card>;
+    return <Card><EmptyState>Açık borcu olan sakin yok 🎉</EmptyState></Card>;
   }
 
   return (
     <>
       <div className="mb-3 inline-flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-sm font-medium text-red-700">
-        ⚠ {unpaid.length} sakin bu ay henüz ödeme yapmadı
+        ⚠ {unpaid.length} sakinin açık borcu var
       </div>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {unpaid.map((r) => (

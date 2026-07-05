@@ -9,6 +9,9 @@ import { Modal, Field, inputCls } from '@/components/UnitsPanel';
 import { Segmented } from '@/components/controls';
 import { useReadOnly } from '@/components/ReadOnly';
 import { money } from '@/lib/format';
+import { parseTrAmount, sanitizeAmountInput } from '@/lib/amount';
+import { todayLocalISO } from '@/lib/date';
+import { friendlyDbMessage } from '@/lib/error';
 
 export type BalanceRow = {
   unit_id: string | null;
@@ -17,23 +20,22 @@ export type BalanceRow = {
   kalan_anapara: number | null;
   kalan_gecikme: number | null;
   toplam_borc: number | null;
+  // P4: avans = mahsup edilmemiş fazla ödeme; net_borc = toplam_borc - avans (yeni tahakkukta otomatik mahsup edilir)
+  avans: number | null;
+  net_borc: number | null;
 };
-
-function todayISO() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
 
 export function BalancesPanel({ balances, siteId }: { balances: BalanceRow[]; siteId: string }) {
   const router = useRouter();
   const ro = useReadOnly();
-  const [asOf, setAsOf] = useState(todayISO());
+  const [asOf, setAsOf] = useState(todayLocalISO());
   const [runningLate, setRunningLate] = useState(false);
 
   // Tahsilat modalı
   const [target, setTarget] = useState<BalanceRow | null>(null);
   const [amount, setAmount] = useState('');
-  const [method, setMethod] = useState<'cash' | 'transfer'>('cash');
+  // 'bank' — collections_method_check yalnız cash/bank/online/qr kabul eder ('transfer' DB'de reddedilir)
+  const [method, setMethod] = useState<'cash' | 'bank'>('cash');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [info, setInfo] = useState<string | null>(null);
@@ -45,14 +47,14 @@ export function BalancesPanel({ balances, siteId }: { balances: BalanceRow[]; si
   async function collect(e: React.FormEvent) {
     e.preventDefault();
     if (!target?.unit_id) return;
-    const amt = Number(amount);
-    if (!amt || amt <= 0) { setError('Geçerli bir tutar giriniz.'); return; }
+    const amt = parseTrAmount(amount);
+    if (!Number.isFinite(amt) || amt <= 0) { setError('Geçerli bir tutar giriniz (örn. 750 veya 1.234,50).'); return; }
     setBusy(true); setError('');
     const { data, error } = await supabaseBrowser().rpc('record_collection', {
       p_site_id: siteId, p_unit_id: target.unit_id, p_amount: amt, p_method: method,
     });
     setBusy(false);
-    if (error) { setError(error.message.replace(/^.*?:\s*/, '')); return; }
+    if (error) { setError(friendlyDbMessage(error.message)); return; }
     const leftover = Number(data ?? 0);
     setTarget(null);
     setInfo(leftover > 0 ? `Tahsilat alındı. ${money(leftover, true)} avans/artan olarak kaydedildi.` : 'Tahsilat alındı.');
@@ -64,7 +66,7 @@ export function BalancesPanel({ balances, siteId }: { balances: BalanceRow[]; si
     setRunningLate(true); setInfo(null);
     const { data, error } = await supabaseBrowser().rpc('calculate_late_fees', { p_site_id: siteId, p_as_of_date: asOf });
     setRunningLate(false);
-    if (error) { alert('Hesaplanamadı: ' + error.message.replace(/^.*?:\s*/, '')); return; }
+    if (error) { alert('Hesaplanamadı: ' + friendlyDbMessage(error.message)); return; }
     setInfo(`${data ?? 0} daireye gecikme tazminatı işlendi.`);
     router.refresh();
   }
@@ -90,17 +92,21 @@ export function BalancesPanel({ balances, siteId }: { balances: BalanceRow[]; si
         ) : (
           <Table>
             <thead>
-              <tr><Th>Daire</Th><Th className="text-right">Anapara</Th><Th className="text-right">Gecikme</Th><Th className="text-right">Toplam Borç</Th><Th className="text-right">İşlem</Th></tr>
+              <tr><Th>Daire</Th><Th className="text-right">Anapara</Th><Th className="text-right">Gecikme</Th><Th className="text-right">Avans</Th><Th className="text-right">Toplam Borç</Th><Th className="text-right">Net Borç</Th><Th className="text-right">İşlem</Th></tr>
             </thead>
             <tbody>
               {balances.map((b) => {
                 const debt = b.toplam_borc ?? 0;
+                const advance = b.avans ?? 0;
+                const net = b.net_borc ?? debt - advance;
                 return (
                   <tr key={b.unit_id} className="hover:bg-slate-50">
                     <Td className="font-medium text-slate-800">{[b.block, b.apartment_number].filter(Boolean).join(' / ') || '—'}</Td>
                     <Td className="text-right">{money(b.kalan_anapara, true)}</Td>
                     <Td className="text-right text-amber-700">{money(b.kalan_gecikme, true)}</Td>
+                    <Td className={`text-right ${advance > 0.005 ? 'font-semibold text-emerald-600' : 'text-slate-400'}`}>{advance > 0.005 ? money(advance, true) : '—'}</Td>
                     <Td className={`text-right font-semibold ${debt > 0.005 ? 'text-red-600' : 'text-emerald-600'}`}>{money(debt, true)}</Td>
+                    <Td className={`text-right font-semibold ${net > 0.005 ? 'text-red-600' : 'text-emerald-600'}`}>{money(net, true)}</Td>
                     <Td className="text-right">
                       <div className="flex justify-end gap-3">
                         {!ro && <button onClick={() => openCollect(b)} className="text-xs font-semibold text-blue-600 hover:underline">Tahsilat Al</button>}
@@ -119,10 +125,11 @@ export function BalancesPanel({ balances, siteId }: { balances: BalanceRow[]; si
         <Modal title="Tahsilat Al" onClose={() => setTarget(null)}>
           <p className="mb-3 text-sm text-slate-500">
             {[target.block, target.apartment_number].filter(Boolean).join(' / ') || 'Daire'} · Açık borç: <span className="font-semibold text-slate-700">{money(target.toplam_borc, true)}</span>
+            {(target.avans ?? 0) > 0.005 && <> · Avans: <span className="font-semibold text-emerald-600">{money(target.avans, true)}</span> (yeni tahakkukta otomatik mahsup edilir)</>}
           </p>
           <form onSubmit={collect} className="space-y-3">
-            <Field label="Tutar (₺)"><input value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))} inputMode="decimal" autoFocus className={inputCls} /></Field>
-            <Field label="Yöntem"><Segmented value={method} onChange={setMethod} options={[{ value: 'cash', label: 'Nakit' }, { value: 'transfer', label: 'Havale/EFT' }]} /></Field>
+            <Field label="Tutar (₺)"><input value={amount} onChange={(e) => setAmount(sanitizeAmountInput(e.target.value))} inputMode="decimal" autoFocus placeholder="örn. 750 veya 1.234,50" className={inputCls} /></Field>
+            <Field label="Yöntem"><Segmented value={method} onChange={setMethod} options={[{ value: 'cash', label: 'Nakit' }, { value: 'bank', label: 'Havale/EFT' }]} /></Field>
             <p className="text-xs text-slate-400">Tahsilat en eski borçtan başlanarak mahsup edilir; artan tutar avans olarak kaydedilir.</p>
             {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>}
             <div className="flex justify-end gap-2 pt-1">

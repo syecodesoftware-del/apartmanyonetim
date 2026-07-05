@@ -25,7 +25,7 @@ export default async function ResidentsPage() {
     <>
       <PageHeader
         title="Sakinler"
-        subtitle={`${occupants.length} güncel sakin · ${withoutAccount} hesapsız`}
+        subtitle={`${occupants.length} güncel sakin · ${withoutAccount} kişi mobil uygulamayı kullanmıyor`}
       />
       <Card>
         <ResidentsTable occupants={occupants} />

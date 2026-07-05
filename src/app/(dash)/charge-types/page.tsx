@@ -19,7 +19,7 @@ export default async function ChargeTypesPage() {
 
   return (
     <>
-      <PageHeader title="Gider Türleri" subtitle="Aidat, yakıt, demirbaş gibi tahakkuk kalemleri" />
+      <PageHeader title="Tahakkuk Türleri" subtitle="Sakinlere yazılan borç kalemleri: aidat, yakıt, demirbaş gibi (gider değildir)" />
       <ChargeTypesPanel chargeTypes={chargeTypes} siteId={manager.siteId} />
     </>
   );

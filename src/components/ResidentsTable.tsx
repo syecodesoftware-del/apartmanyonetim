@@ -66,8 +66,8 @@ export function ResidentsTable({ occupants }: { occupants: OccupantRow[] }) {
           <button className={chip(rel === 'kiraci')} onClick={() => setRel('kiraci')}>Kiracı</button>
           <span className="mx-1 h-4 w-px bg-slate-200" />
           <button className={chip(acc === 'all')} onClick={() => setAcc('all')}>Hepsi</button>
-          <button className={chip(acc === 'with')} onClick={() => setAcc('with')}>Hesaplı</button>
-          <button className={chip(acc === 'without')} onClick={() => setAcc('without')}>Hesapsız</button>
+          <button className={chip(acc === 'with')} onClick={() => setAcc('with')}>Uygulamayı Kullanıyor</button>
+          <button className={chip(acc === 'without')} onClick={() => setAcc('without')}>Kullanmıyor</button>
           <span className="mx-1 h-4 w-px bg-slate-200" />
           <button className={chip(debtorOnly)} onClick={() => setDebtorOnly((v) => !v)}>Borçlu</button>
         </div>
@@ -82,7 +82,7 @@ export function ResidentsTable({ occupants }: { occupants: OccupantRow[] }) {
               <Th>Ad Soyad</Th>
               <Th>Daire</Th>
               <Th>İlişki</Th>
-              <Th>Hesap</Th>
+              <Th>Mobil Uygulama</Th>
               <Th>Telefon</Th>
               <Th className="text-right">Borç</Th>
             </tr>
@@ -110,9 +110,9 @@ export function ResidentsTable({ occupants }: { occupants: OccupantRow[] }) {
                   </Td>
                   <Td>
                     {o.has_account ? (
-                      <Badge tone="green">Hesaplı</Badge>
+                      <Badge tone="green">Kullanıyor</Badge>
                     ) : (
-                      <Badge tone="amber">Hesapsız</Badge>
+                      <Badge tone="amber">Kullanmıyor</Badge>
                     )}
                   </Td>
                   <Td className="text-slate-600">{o.phone ?? '—'}</Td>

@@ -9,18 +9,13 @@ export default async function UnpaidPage() {
   const manager = await requireManager();
   const sb = await supabaseServer();
 
-  const now = new Date();
-  const month = now.getMonth() + 1;
-  const year = now.getFullYear();
-  const monthLabel = now.toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' });
-
   const [{ data: residents }, { data: owing }] = await Promise.all([
     sb.from('users').select('id, full_name, block, apartment_number, phone')
       .eq('site_id', manager.siteId).in('role', ['resident', 'manager']).eq('approval_status', 'approved')
       .order('full_name'),
+    // Birikmiş borç: hangi aya ait olursa olsun açık/kısmi tüm tahakkuklar
     sb.from('accruals').select('debtor_user_id')
-      .eq('site_id', manager.siteId).in('status', ['open', 'partial'])
-      .eq('period_month', month).eq('period_year', year),
+      .eq('site_id', manager.siteId).in('status', ['open', 'partial']),
   ]);
 
   const owingIds = new Set((owing ?? []).map((a) => a.debtor_user_id));
@@ -28,7 +23,7 @@ export default async function UnpaidPage() {
 
   return (
     <>
-      <PageHeader title="Ödemeyenler" subtitle={`${monthLabel} · bu ay açık/kısmi tahakkuğu olanlar`} />
+      <PageHeader title="Ödemeyenler" subtitle="Açık veya kısmi ödenmiş tahakkuğu olan sakinler" />
       <UnpaidList unpaid={unpaid} siteId={manager.siteId} />
     </>
   );

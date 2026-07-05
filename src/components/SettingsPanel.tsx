@@ -1,13 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabaseBrowser } from '@/lib/supabaseBrowser';
 import { Card, EmptyState } from '@/components/ui';
 import { Modal } from '@/components/UnitsPanel';
 import { Toggle } from '@/components/controls';
 import { useReadOnly } from '@/components/ReadOnly';
-import type { Json } from '@/lib/database.types';
+import { friendlyDbMessage } from '@/lib/error';
 
 export type SiteInfo = {
   id: string; name: string; district: string | null; city: string | null;
@@ -20,7 +20,7 @@ const FEATURES = [
   { key: 'enable_voting', label: 'Oylama', desc: 'Sakinler anket oluşturabilir' },
   { key: 'enable_booking', label: 'Rezervasyon', desc: 'Ortak alan rezervasyonu' },
   { key: 'enable_complaints', label: 'Şikayet', desc: 'Şikayet bildirimi aktif' },
-  { key: 'enable_qr_payment', label: 'QR Ödeme', desc: 'QR kodla aidat ödeme' },
+  // enable_qr_payment: QR ödeme henüz üründe yok (Aşama 1.3 kararı, 2026-07-03) — özellik gelince geri eklenir
   { key: 'auto_approve_residents', label: 'Otomatik Onay', desc: 'Sakinler otomatik onaylanır' },
 ];
 
@@ -28,16 +28,23 @@ export function SettingsPanel({ site, pending, eligible }: { site: SiteInfo | nu
   const router = useRouter();
   const ro = useReadOnly();
   const [settings, setSettings] = useState<Record<string, unknown>>(site?.settings ?? {});
+  // K3: sunucudan gelen ayarlarla eşitle (iki sekme / yeniden yükleme senaryosu)
+  useEffect(() => { setSettings(site?.settings ?? {}); }, [site?.id, site?.settings]);
   const [busy, setBusy] = useState(false);
   const [transferOpen, setTransferOpen] = useState(false);
 
   if (!site) return <Card><EmptyState>Site bilgisi bulunamadı.</EmptyState></Card>;
 
   async function toggle(key: string) {
-    const updated = { ...settings, [key]: !settings[key] };
-    setSettings(updated);
-    const { error } = await supabaseBrowser().from('sites').update({ settings: updated as unknown as Json }).eq('id', site!.id);
-    if (error) { alert('Kaydedilemedi: ' + error.message); setSettings(settings); }
+    const prev = settings;
+    const nextValue = !prev[key];
+    setSettings({ ...prev, [key]: nextValue }); // iyimser güncelle
+    // K3: tek anahtar sunucuda merge edilir (update_site_setting RPC) — bayat kopya tüm JSONB'yi ezemez
+    const { data, error } = await supabaseBrowser().rpc('update_site_setting', {
+      p_site_id: site!.id, p_key: key, p_value: nextValue,
+    });
+    if (error) { alert('Kaydedilemedi: ' + friendlyDbMessage(error.message)); setSettings(prev); return; }
+    setSettings((data as Record<string, unknown> | null) ?? { ...prev, [key]: nextValue });
   }
 
   async function respondMembership(m: PendingMembership, approve: boolean) {

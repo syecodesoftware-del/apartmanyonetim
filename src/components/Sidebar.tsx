@@ -16,7 +16,10 @@ function isActive(pathname: string, href: string): boolean {
 export function Sidebar({ siteName }: { siteName: string }) {
   const pathname = usePathname();
   const { open, setOpen } = useNav();
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  // İlk açılışta defaultCollapsed gruplar katlı gelir; kullanıcı tercihi localStorage'dan sonra ezer.
+  const [collapsed, setCollapsed] = useState<Set<string>>(
+    () => new Set(NAV_GROUPS.filter((g) => g.defaultCollapsed).map((g) => g.title)),
+  );
 
   // Kullanıcının katladığı grupları hatırla (hydration uyumu için mount sonrası oku)
   useEffect(() => {

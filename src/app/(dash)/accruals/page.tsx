@@ -20,7 +20,7 @@ export default async function AccrualsPage() {
 
   return (
     <>
-      <PageHeader title="Aidat Tahakkuku" subtitle="Seçili gider türü için dönemsel borç oluşturur (cari defter)." />
+      <PageHeader title="Aidat Tahakkuku" subtitle="Seçili tahakkuk türü için dönemsel borç oluşturur (cari defter)." />
       <AccrualsForm chargeTypes={chargeTypes} siteId={manager.siteId} />
     </>
   );
