@@ -6,7 +6,7 @@ import { ReadOnlyProvider } from '@/components/ReadOnly';
 import { NavProvider } from '@/components/NavProvider';
 import { MobileMenuButton } from '@/components/MobileMenuButton';
 
-export default async function DashLayout({ children }: { children: React.ReactNode }) {
+export default async function DashLayout({ children, modal }: { children: React.ReactNode; modal: React.ReactNode }) {
   const manager = await requireManager();
 
   return (
@@ -40,6 +40,7 @@ export default async function DashLayout({ children }: { children: React.ReactNo
             </div>
           )}
           <main className="flex-1 overflow-auto p-4 sm:p-6">{children}</main>
+          {modal}
         </div>
       </div>
       </NavProvider>
