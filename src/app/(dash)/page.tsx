@@ -83,9 +83,9 @@ export default async function DashboardPage() {
 
         <Card title="Hızlı İşlemler">
           <div className="grid grid-cols-2 gap-3">
-            <QuickLink href="/approvals" icon="✅" label="Onaylar" />
+            <QuickLink href="/approvals" icon="✅" label="Başvuru & Davetler" />
             <QuickLink href="/residents" icon="👥" label="Sakinler" />
-            <QuickLink href="/invitations" icon="✉️" label="Davet Gönder" />
+            <QuickLink href="/approvals?davet=1" icon="✉️" label="Davet Gönder" />
             <QuickLink href="/units" icon="🏠" label="Daireler" />
           </div>
         </Card>

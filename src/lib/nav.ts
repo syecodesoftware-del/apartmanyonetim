@@ -14,8 +14,7 @@ export const NAV_GROUPS: NavGroup[] = [
     title: 'Sakinler',
     items: [
       { href: '/residents', label: 'Sakinler', icon: '👥' },
-      { href: '/approvals', label: 'Onay Bekleyenler', icon: '✅' },
-      { href: '/invitations', label: 'Davetler', icon: '✉️' },
+      { href: '/approvals', label: 'Başvuru & Davetler', icon: '✉️' },
       { href: '/units', label: 'Daireler', icon: '🏠' },
     ],
   },
