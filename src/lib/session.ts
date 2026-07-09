@@ -76,3 +76,51 @@ export async function requireManager(): Promise<ManagerSession> {
   if (!manager) redirect('/login');
   return manager;
 }
+
+/** B4-2 Sakin web portalı oturumu — yalnız role='resident', onaylı. RLS kullanıcının kendi verisini izole eder. */
+export type ResidentSession = {
+  userId: string;
+  email: string;
+  fullName: string | null;
+  siteId: string;
+  siteName: string;
+  unitId: string | null;
+  block: string | null;
+  apartmentNumber: string | null;
+};
+
+export async function getResident(): Promise<ResidentSession | null> {
+  const sb = await supabaseServer();
+  const { data: { user } } = await sb.auth.getUser();
+  if (!user) return null;
+
+  const { data: profile } = await sb
+    .from('users')
+    .select('id, email, full_name, role, site_id, unit_id, block, apartment_number, approval_status')
+    .eq('id', user.id)
+    .single();
+
+  if (!profile || profile.role !== 'resident') return null;
+  if (!profile.site_id || profile.approval_status !== 'approved') return null;
+
+  const { data: site } = await sb.from('sites').select('name, deleted_at').eq('id', profile.site_id).single();
+  if (!site || site.deleted_at) return null;
+
+  return {
+    userId: profile.id,
+    email: profile.email,
+    fullName: profile.full_name,
+    siteId: profile.site_id,
+    siteName: site.name ?? '—',
+    unitId: profile.unit_id,
+    block: profile.block,
+    apartmentNumber: profile.apartment_number,
+  };
+}
+
+/** Portal sayfalarında: sakin değilse /login'e yönlendirir. */
+export async function requireResident(): Promise<ResidentSession> {
+  const r = await getResident();
+  if (!r) redirect('/login');
+  return r;
+}

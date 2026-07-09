@@ -120,6 +120,11 @@ export function AnnouncementsPanel({ announcements, siteId, managerId }: { annou
                   <button type="button" key={p.key} onClick={() => setPriority(p.key)} className={`rounded-full border px-3 py-1.5 text-sm font-medium transition ${priority === p.key ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'}`}>{p.label}</button>
                 ))}
               </div>
+              <p className="mt-1.5 text-xs text-slate-400">
+                {priority === 'urgent'
+                  ? '\ud83d\udea8 Acil duyuru: bildirim tercihlerinden ba\u011f\u0131ms\u0131z olarak t\u00fcm sakinlere an\u0131nda bildirim g\u00f6nderilir. Yaln\u0131zca ger\u00e7ek acil durumlarda kullan\u0131n.'
+                  : 'Duyuru yay\u0131nland\u0131\u011f\u0131nda sakinlere bildirim g\u00f6nderilir (bildirimi kapatanlar hari\u00e7).'}
+              </p>
             </div>
             <div className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2">
               <span className="text-sm text-slate-700">Duyuruyu sabitle <span className="text-slate-400">(en üstte gösterilir)</span></span>

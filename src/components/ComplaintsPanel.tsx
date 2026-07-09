@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabaseBrowser } from '@/lib/supabaseBrowser';
 import { Card, EmptyState, Badge } from '@/components/ui';
@@ -20,9 +20,35 @@ export type ComplaintRow = {
   user_id: string | null;
   is_anonymous: boolean;
   created_at: string | null;
+  photos: string[] | null;
   user_name: string;
   user_unit: string;
 };
+
+/** Şikayet fotoğrafları — private bucket, süreli imzalı URL ile gösterilir (RLS: sahibi + site yönetimi). */
+function ComplaintPhotos({ paths }: { paths: string[] }) {
+  const [urls, setUrls] = useState<string[]>([]);
+  useEffect(() => {
+    let alive = true;
+    supabaseBrowser().storage.from('complaint-photos').createSignedUrls(paths, 3600)
+      .then(({ data }) => {
+        if (alive) setUrls((data ?? []).map((d) => d.signedUrl).filter((u): u is string => !!u));
+      });
+    return () => { alive = false; };
+  }, [paths]);
+
+  if (urls.length === 0) return null;
+  return (
+    <div className="mt-2 flex flex-wrap gap-2">
+      {urls.map((u) => (
+        <a key={u} href={u} target="_blank" rel="noreferrer">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={u} alt="Şikayet fotoğrafı" className="h-20 w-20 rounded-lg border border-slate-200 object-cover transition hover:opacity-80" />
+        </a>
+      ))}
+    </div>
+  );
+}
 
 type Status = 'open' | 'in_progress' | 'resolved' | 'rejected' | 'closed';
 const STATUS: Record<Status, { label: string; tone: 'red' | 'amber' | 'green' | 'slate' }> = {
@@ -91,6 +117,7 @@ export function ComplaintsPanel({ complaints, managerId }: { complaints: Complai
                     {c.is_anonymous && <Badge tone="slate">🕶️ Anonim</Badge>}
                   </div>
                   {c.description && <p className="mt-1 whitespace-pre-wrap text-sm text-slate-600">{c.description}</p>}
+                  {c.photos && c.photos.length > 0 && <ComplaintPhotos paths={c.photos} />}
                   <p className="mt-2 text-xs text-slate-400">{c.user_name}{c.user_unit ? ` · ${c.user_unit}` : ''} · {dateTime(c.created_at)}</p>
                   {c.resolution_note && (
                     <p className="mt-2 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800"><span className="font-semibold">Çözüm notu:</span> {c.resolution_note}</p>

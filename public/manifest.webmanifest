@@ -1,0 +1,14 @@
+{
+  "name": "Komşu Asistanı — Sakin Portalı",
+  "short_name": "Komşu Portal",
+  "description": "Aidat borcunuzu, ekstrenizi ve site duyurularını görüntüleyin.",
+  "start_url": "/portal",
+  "scope": "/portal",
+  "display": "standalone",
+  "background_color": "#f1f5f9",
+  "theme_color": "#2563eb",
+  "lang": "tr",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

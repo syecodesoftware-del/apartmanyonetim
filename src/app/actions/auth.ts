@@ -23,21 +23,29 @@ export async function login(_prev: LoginState, formData: FormData): Promise<Logi
   // Rol doğrulaması — kullanıcının kendi profili (RLS ile okunur)
   const { data: profile } = await sb
     .from('users')
-    .select('role, site_id')
+    .select('role, site_id, approval_status')
     .eq('id', data.user.id)
     .single();
 
-  if (!profile || !['manager', 'admin', 'auditor'].includes(profile.role ?? '')) {
+  const isStaff = ['manager', 'admin', 'auditor'].includes(profile?.role ?? '');
+  const isResident = profile?.role === 'resident';
+  if (!profile || (!isStaff && !isResident)) {
     await sb.auth.signOut();
-    return { error: 'Bu hesabın yönetici paneline erişim yetkisi yok.' };
+    return { error: 'Bu hesabın panele erişim yetkisi yok.' };
   }
   if (!profile.site_id) {
     await sb.auth.signOut();
     return { error: 'Hesabınıza atanmış aktif bir site yok.' };
   }
+  // Sakin: yalnız onaylı hesap portala girer (personel her zaman onaylıdır)
+  if (isResident && profile.approval_status !== 'approved') {
+    await sb.auth.signOut();
+    return { error: 'Hesabınız henüz yönetici onayında. Onaylandığında giriş yapabilirsiniz.' };
+  }
 
   await clearRateLimit(`login:${email.toLowerCase()}`);
-  redirect('/');
+  // Personel → yönetim paneli; sakin → salt-okunur portal
+  redirect(isStaff ? '/' : '/portal');
 }
 
 export async function logout() {

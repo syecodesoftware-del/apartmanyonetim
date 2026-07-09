@@ -24,6 +24,12 @@ const FEATURES = [
   { key: 'auto_approve_residents', label: 'Otomatik Onay', desc: 'Sakinler otomatik onaylanır' },
 ];
 
+// B4-1 Sakin şeffaflık izinleri — açıldığında sakinler mobil uygulamada özeti görür (birim kırılımı YOK)
+const TRANSPARENCY = [
+  { key: 'transparency_income_expense', label: 'Gelir/Gider Özeti', desc: 'Sakinler bu yılın toplam tahsilat/gider/net özetini görür' },
+  { key: 'transparency_cash_summary', label: 'Kasa/Banka Özeti', desc: 'Sakinler toplam kasa ve banka bakiyesini görür' },
+];
+
 export function SettingsPanel({ site, pending, eligible }: { site: SiteInfo | null; pending: PendingMembership[]; eligible: EligibleResident[] }) {
   const router = useRouter();
   const ro = useReadOnly();
@@ -87,6 +93,26 @@ export function SettingsPanel({ site, pending, eligible }: { site: SiteInfo | nu
       <Card title="Site Özellikleri">
         <ul className="divide-y divide-slate-100">
           {FEATURES.map((f) => (
+            <li key={f.key} className="flex items-center justify-between py-2.5 first:pt-0 last:pb-0">
+              <div>
+                <p className="text-sm font-medium text-slate-800">{f.label}</p>
+                <p className="text-xs text-slate-400">{f.desc}</p>
+              </div>
+              {ro
+                ? <span className={`text-xs font-semibold ${settings[f.key] ? 'text-emerald-600' : 'text-slate-400'}`}>{settings[f.key] ? 'Açık' : 'Kapalı'}</span>
+                : <Toggle checked={!!settings[f.key]} onChange={() => toggle(f.key)} />}
+            </li>
+          ))}
+        </ul>
+      </Card>
+
+      {/* B4-1 Sakin şeffaflığı */}
+      <Card title="Sakin Şeffaflığı">
+        <p className="mb-2 text-xs text-slate-400">
+          Açtığınız bölümler sakinlerin mobil uygulamasında salt-okunur olarak görünür. Yalnızca site geneli toplamlar paylaşılır — kişi/daire bazlı bilgi paylaşılmaz.
+        </p>
+        <ul className="divide-y divide-slate-100">
+          {TRANSPARENCY.map((f) => (
             <li key={f.key} className="flex items-center justify-between py-2.5 first:pt-0 last:pb-0">
               <div>
                 <p className="text-sm font-medium text-slate-800">{f.label}</p>

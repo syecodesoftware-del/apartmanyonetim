@@ -170,3 +170,144 @@ export function downloadBlob(blob: Blob, filename: string) {
   a.remove();
   URL.revokeObjectURL(url);
 }
+
+// ─────────────────────────────────────────────────────────────
+// B3-3 Banka dosya içe aktarımı — genel CSV/Excel okuyucu + sütun eşleme
+// ─────────────────────────────────────────────────────────────
+
+export type SheetData = { headers: string[]; rows: string[][] };
+
+/** İlk sayfayı başlık satırı + veri satırları olarak okur (CSV veya Excel). */
+export function readSheetRows(data: ArrayBuffer): SheetData {
+  const wb = XLSX.read(data, { type: 'array', cellDates: false });
+  const sheet = wb.Sheets[wb.SheetNames[0]];
+  if (!sheet) return { headers: [], rows: [] };
+  const aoa = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: '', raw: false, blankrows: false });
+  if (aoa.length === 0) return { headers: [], rows: [] };
+  const headers = (aoa[0] as unknown[]).map((h) => String(h ?? '').trim());
+  const rows = aoa.slice(1).map((r) => headers.map((_, i) => String((r as unknown[])[i] ?? '').trim()));
+  return { headers, rows };
+}
+
+export type BankColMap = {
+  date: number;
+  amount: number;
+  /** Ayrı yön sütunu indeksi; signMode=true ise yok sayılır. */
+  direction: number | null;
+  description: number | null;
+  counterparty: number | null;
+  ref: number | null;
+  /** true: tutarın işareti yönü belirler (negatif=çıkış). false: ayrı yön sütunu. */
+  signMode: boolean;
+};
+
+export type BankTxnDraft = {
+  txn_date: string;
+  direction: 'giris' | 'cikis';
+  amount: number;
+  description: string | null;
+  counterparty: string | null;
+  bank_ref: string | null;
+};
+
+export type BankParseResult = { txns: BankTxnDraft[]; errors: { row: number; msg: string }[] };
+
+/** "1.234,50" / "-300,50" / "(300,50)" / "1234.50" → işaretli sayı. */
+export function parseSignedAmount(raw: string): number | null {
+  let s = (raw ?? '').trim();
+  if (!s) return null;
+  let neg = false;
+  if (/^\(.*\)$/.test(s)) { neg = true; s = s.slice(1, -1); }
+  if (s.startsWith('-')) { neg = true; s = s.slice(1); }
+  if (s.startsWith('+')) s = s.slice(1);
+  s = s.replace(/[₺\s]/g, '');
+  // binlik/ondalık: son ayraç ondalıktır
+  const lastComma = s.lastIndexOf(',');
+  const lastDot = s.lastIndexOf('.');
+  if (lastComma > lastDot) {
+    s = s.replace(/\./g, '').replace(',', '.');
+  } else {
+    s = s.replace(/,/g, '');
+  }
+  const n = Number(s);
+  if (!Number.isFinite(n)) return null;
+  return neg ? -n : n;
+}
+
+/** Yaygın TR tarih formatlarını ISO'ya (yyyy-mm-dd) çevirir. */
+export function parseBankDate(raw: string): string | null {
+  const s = (raw ?? '').trim();
+  if (!s) return null;
+  let m = s.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/); // yyyy-mm-dd
+  if (m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
+  m = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})/); // dd.mm.yyyy
+  if (m) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+  m = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2})$/); // dd.mm.yy
+  if (m) return `20${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+  return null;
+}
+
+function normDirectionCell(raw: string): 'giris' | 'cikis' | null {
+  const s = (raw ?? '').trim().toLocaleLowerCase('tr-TR');
+  if (!s) return null;
+  if (/^(g|giriş|giris|alacak|\+|credit|c)/.test(s) && !/çık|cik/.test(s)) return 'giris';
+  if (/^(ç|c|çıkış|cikis|çikis|borç|borc|-|debit|d)/.test(s)) return 'cikis';
+  return null;
+}
+
+/** Eşlenen sütunlarla satırları bank_transactions taslaklarına çevirir + hataları toplar. */
+export function mapBankRows(headers: string[], rows: string[][], map: BankColMap): BankParseResult {
+  const txns: BankTxnDraft[] = [];
+  const errors: { row: number; msg: string }[] = [];
+
+  rows.forEach((r, i) => {
+    const rowNo = i + 2; // başlık = 1
+    const dateISO = parseBankDate(r[map.date] ?? '');
+    const amtRaw = parseSignedAmount(r[map.amount] ?? '');
+    if (!dateISO) { errors.push({ row: rowNo, msg: `Tarih okunamadı: "${r[map.date] ?? ''}"` }); return; }
+    if (amtRaw === null) { errors.push({ row: rowNo, msg: `Tutar okunamadı: "${r[map.amount] ?? ''}"` }); return; }
+
+    let direction: 'giris' | 'cikis' | null;
+    if (map.signMode) {
+      direction = amtRaw < 0 ? 'cikis' : 'giris';
+    } else if (map.direction !== null) {
+      direction = normDirectionCell(r[map.direction] ?? '');
+      if (!direction) { errors.push({ row: rowNo, msg: `Yön okunamadı: "${r[map.direction] ?? ''}"` }); return; }
+    } else {
+      direction = amtRaw < 0 ? 'cikis' : 'giris';
+    }
+
+    const amount = Math.abs(amtRaw);
+    if (amount === 0) { errors.push({ row: rowNo, msg: 'Tutar 0' }); return; }
+
+    txns.push({
+      txn_date: dateISO,
+      direction,
+      amount: Math.round(amount * 100) / 100,
+      description: map.description !== null ? (r[map.description] || null) : null,
+      counterparty: map.counterparty !== null ? (r[map.counterparty] || null) : null,
+      bank_ref: map.ref !== null ? (r[map.ref] || null) : null,
+    });
+  });
+
+  return { txns, errors };
+}
+
+/** Başlık adından sütun tahmini (otomatik eşleme için). */
+export function guessBankColumns(headers: string[]): Partial<BankColMap> {
+  const find = (...keys: string[]) => {
+    const idx = headers.findIndex((h) => {
+      const l = h.toLocaleLowerCase('tr-TR');
+      return keys.some((k) => l.includes(k));
+    });
+    return idx >= 0 ? idx : null;
+  };
+  return {
+    date: find('tarih', 'date') ?? 0,
+    amount: find('tutar', 'tutarı', 'amount', 'işlem tutar') ?? 1,
+    direction: find('yön', 'yon', 'borç/alacak', 'b/a', 'tür', 'tip'),
+    description: find('açıklama', 'aciklama', 'description', 'detay'),
+    counterparty: find('karşı', 'karsi', 'gönderen', 'unvan', 'ad soyad', 'isim'),
+    ref: find('referans', 'ref', 'dekont', 'fiş', 'işlem no', 'sıra'),
+  };
+}

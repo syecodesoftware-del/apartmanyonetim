@@ -3,6 +3,7 @@ import { requireManager } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
 import { PageHeader, StatCard } from '@/components/ui';
 import { ReconcilePanel, type Txn, type Summary, type UnitOption } from '@/components/ReconcilePanel';
+import { BankImportPanel } from '@/components/BankImportPanel';
 import { money } from '@/lib/format';
 
 export const dynamic = 'force-dynamic';
@@ -29,7 +30,12 @@ export default async function ReconcilePage({ params }: { params: Promise<{ acco
       <PageHeader
         title={`Banka Mutabakatı — ${accLabel}`}
         subtitle={account?.iban ?? undefined}
-        action={<Link href="/cash" className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50">← Kasa & Banka</Link>}
+        action={
+          <div className="flex items-center gap-2">
+            <BankImportPanel siteId={manager.siteId} accountId={accountId} managerId={manager.userId} />
+            <Link href="/cash" className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50">← Kasa & Banka</Link>
+          </div>
+        }
       />
 
       <div className="mb-5 grid grid-cols-2 gap-4 lg:grid-cols-4">

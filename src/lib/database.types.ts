@@ -107,6 +107,126 @@ export type Database = {
           },
         ]
       }
+      budgets: {
+        Row: {
+          id: string
+          site_id: string
+          year: number
+          name: string
+          status: string
+          note: string | null
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          site_id: string
+          year: number
+          name?: string
+          status?: string
+          note?: string | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          site_id?: string
+          year?: number
+          name?: string
+          status?: string
+          note?: string | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      budget_lines: {
+        Row: {
+          id: string
+          budget_id: string
+          site_id: string
+          charge_type_id: string | null
+          label: string
+          annual_amount: number
+          distribution: string
+          note: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          budget_id: string
+          site_id: string
+          charge_type_id?: string | null
+          label: string
+          annual_amount: number
+          distribution?: string
+          note?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          budget_id?: string
+          site_id?: string
+          charge_type_id?: string | null
+          label?: string
+          annual_amount?: number
+          distribution?: string
+          note?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
+      enforcement_cases: {
+        Row: {
+          id: string
+          site_id: string
+          unit_id: string
+          debtor_user_id: string | null
+          status: string
+          case_no: string | null
+          lawyer: string | null
+          debt_at_open: number
+          note: string | null
+          opened_at: string
+          opened_by: string | null
+          closed_at: string | null
+          closed_by: string | null
+        }
+        Insert: {
+          id?: string
+          site_id: string
+          unit_id: string
+          debtor_user_id?: string | null
+          status?: string
+          case_no?: string | null
+          lawyer?: string | null
+          debt_at_open?: number
+          note?: string | null
+          opened_at?: string
+          opened_by?: string | null
+          closed_at?: string | null
+          closed_by?: string | null
+        }
+        Update: {
+          id?: string
+          site_id?: string
+          unit_id?: string
+          debtor_user_id?: string | null
+          status?: string
+          case_no?: string | null
+          lawyer?: string | null
+          debt_at_open?: number
+          note?: string | null
+          opened_at?: string
+          opened_by?: string | null
+          closed_at?: string | null
+          closed_by?: string | null
+        }
+        Relationships: []
+      }
       admin_audit_log: {
         Row: {
           action: string
@@ -2057,6 +2177,357 @@ export type Database = {
       }
     }
     Functions: {
+      get_unit_shared_debt: { Args: never; Returns: Json }
+      create_work_order: {
+        Args: {
+          p_kind: string
+          p_title: string
+          p_description?: string
+          p_priority?: string
+          p_unit_id?: string
+          p_due_date?: string
+          p_source_complaint_id?: string
+        }
+        Returns: string
+      }
+      assign_work_order: {
+        Args: {
+          p_id: string
+          p_assignee_user_id?: string
+          p_assignee_name?: string
+          p_assignee_phone?: string
+        }
+        Returns: undefined
+      }
+      update_work_order_status: {
+        Args: { p_id: string; p_status: string; p_note?: string }
+        Returns: undefined
+      }
+      set_work_order_cost: {
+        Args: { p_id: string; p_cost: number; p_cost_note?: string }
+        Returns: undefined
+      }
+      convert_complaint_to_work_order: {
+        Args: { p_complaint_id: string }
+        Returns: string
+      }
+      get_work_orders: { Args: { p_status?: string }; Returns: Json }
+      get_work_order_detail: { Args: { p_id: string }; Returns: Json }
+      add_site_document: {
+        Args: {
+          p_category: string
+          p_title: string
+          p_storage_path: string
+          p_mime?: string
+          p_size_bytes?: number
+          p_entity_type?: string
+          p_entity_id?: string
+          p_note?: string
+        }
+        Returns: string
+      }
+      delete_site_document: { Args: { p_id: string }; Returns: string }
+      get_site_documents: {
+        Args: { p_category?: string; p_entity_type?: string; p_entity_id?: string }
+        Returns: Json
+      }
+      save_asset: {
+        Args: {
+          p_id: string | null
+          p_name: string
+          p_category?: string
+          p_location?: string
+          p_quantity?: number
+          p_serial_no?: string
+          p_purchase_date?: string
+          p_value?: number
+          p_status?: string
+          p_next_inspection_date?: string
+          p_inspection_note?: string
+          p_warranty_until?: string
+          p_note?: string
+        }
+        Returns: string
+      }
+      delete_asset: { Args: { p_id: string }; Returns: undefined }
+      get_assets: { Args: { p_category?: string }; Returns: Json }
+      get_inspection_due: { Args: { p_within_days?: number }; Returns: Json }
+      save_staff: {
+        Args: {
+          p_id: string | null
+          p_full_name: string
+          p_role?: string
+          p_phone?: string
+          p_id_no?: string
+          p_start_date?: string
+          p_end_date?: string
+          p_monthly_wage?: number
+          p_active?: boolean
+          p_note?: string
+        }
+        Returns: string
+      }
+      delete_staff: { Args: { p_id: string }; Returns: undefined }
+      get_staff: { Args: { p_include_inactive?: boolean }; Returns: Json }
+      save_staff_shift: {
+        Args: { p_id: string | null; p_staff_id: string; p_date: string; p_start: string; p_end: string; p_note?: string }
+        Returns: string
+      }
+      delete_staff_shift: { Args: { p_id: string }; Returns: undefined }
+      get_staff_shifts: { Args: { p_from: string; p_to: string }; Returns: Json }
+      save_supplier: {
+        Args: {
+          p_id: string | null
+          p_name: string
+          p_category?: string
+          p_vkn?: string
+          p_phone?: string
+          p_email?: string
+          p_iban?: string
+          p_contact_person?: string
+          p_active?: boolean
+          p_note?: string
+        }
+        Returns: string
+      }
+      delete_supplier: { Args: { p_id: string }; Returns: undefined }
+      get_suppliers: { Args: { p_include_inactive?: boolean }; Returns: Json }
+      save_supplier_invoice: {
+        Args: {
+          p_id: string | null
+          p_supplier_id: string
+          p_amount: number
+          p_invoice_no?: string
+          p_invoice_date?: string
+          p_due_date?: string
+          p_description?: string
+          p_work_order_id?: string
+        }
+        Returns: string
+      }
+      approve_invoice: { Args: { p_id: string }; Returns: undefined }
+      reject_invoice: { Args: { p_id: string; p_reason?: string }; Returns: undefined }
+      mark_invoice_paid: { Args: { p_id: string; p_paid_date?: string }; Returns: undefined }
+      get_supplier_invoices: { Args: { p_status?: string; p_supplier_id?: string }; Returns: Json }
+      get_payment_queue: { Args: never; Returns: Json }
+      save_assembly: {
+        Args: {
+          p_id: string | null
+          p_title: string
+          p_kind?: string
+          p_first_meeting_at?: string
+          p_second_meeting_at?: string
+          p_location?: string
+        }
+        Returns: string
+      }
+      publish_assembly_call: { Args: { p_id: string }; Returns: undefined }
+      save_assembly_item: {
+        Args: {
+          p_id: string | null
+          p_assembly_id: string
+          p_item_no: number
+          p_title: string
+          p_description?: string
+        }
+        Returns: string
+      }
+      delete_assembly_item: { Args: { p_id: string }; Returns: undefined }
+      set_item_voting: { Args: { p_item_id: string; p_open: boolean }; Returns: undefined }
+      decide_item: { Args: { p_item_id: string; p_decision: string; p_note?: string }; Returns: undefined }
+      cast_assembly_vote: { Args: { p_item_id: string; p_unit_id: string; p_choice: string }; Returns: undefined }
+      mark_attendance: {
+        Args: { p_assembly_id: string; p_unit_id: string; p_present?: boolean; p_proxy_name?: string }
+        Returns: undefined
+      }
+      close_assembly: { Args: { p_id: string; p_status: string; p_minutes?: string }; Returns: undefined }
+      get_assemblies: { Args: never; Returns: Json }
+      get_assembly_detail: { Args: { p_id: string }; Returns: Json }
+      get_my_assembly_ballot: { Args: never; Returns: Json }
+      save_board_decision: {
+        Args: {
+          p_id: string | null
+          p_subject: string
+          p_body?: string
+          p_decision_date?: string
+          p_participants?: string
+          p_source?: string
+          p_assembly_id?: string
+        }
+        Returns: string
+      }
+      delete_board_decision: { Args: { p_id: string }; Returns: undefined }
+      get_board_decisions: { Args: { p_year?: number }; Returns: Json }
+      get_isletme_defteri: { Args: { p_year: number; p_month?: number }; Returns: Json }
+      save_vehicle: {
+        Args: { p_id: string | null; p_unit_id: string; p_plate: string; p_label?: string; p_active?: boolean }
+        Returns: string
+      }
+      delete_vehicle: { Args: { p_id: string }; Returns: undefined }
+      get_my_vehicles: { Args: never; Returns: Json }
+      lookup_plate: { Args: { p_plate: string }; Returns: Json }
+      create_visitor_pass: {
+        Args: { p_unit_id: string; p_visitor_name: string; p_plate?: string; p_expected_date?: string }
+        Returns: Json
+      }
+      cancel_visitor_pass: { Args: { p_id: string }; Returns: undefined }
+      get_my_visitor_passes: { Args: never; Returns: Json }
+      get_visitor_passes: { Args: { p_date?: string; p_status?: string }; Returns: Json }
+      verify_visitor_code: { Args: { p_code: string }; Returns: Json }
+      register_package: { Args: { p_unit_id: string; p_carrier?: string; p_description?: string }; Returns: string }
+      mark_package_delivered: { Args: { p_id: string; p_note?: string }; Returns: undefined }
+      get_packages: { Args: { p_status?: string }; Returns: Json }
+      get_my_packages: { Args: never; Returns: Json }
+      send_dm: { Args: { p_body: string; p_resident_user_id?: string }; Returns: string }
+      get_my_thread: { Args: never; Returns: Json }
+      get_dm_threads: { Args: never; Returns: Json }
+      get_dm_thread: { Args: { p_resident_user_id: string }; Returns: Json }
+      save_meter: {
+        Args: { p_id: string | null; p_unit_id: string; p_kind?: string; p_serial_no?: string; p_active?: boolean }
+        Returns: string
+      }
+      delete_meter: { Args: { p_id: string }; Returns: undefined }
+      record_meter_reading: {
+        Args: { p_meter_id: string; p_reading: number; p_read_at?: string; p_note?: string; p_allow_decrease?: boolean }
+        Returns: string
+      }
+      get_meters: { Args: { p_kind?: string }; Returns: Json }
+      get_meter_history: { Args: { p_meter_id: string }; Returns: Json }
+      get_my_meters: { Args: never; Returns: Json }
+      create_community_post: {
+        Args: { p_kind: string; p_title: string; p_body?: string; p_price?: number; p_contact_info?: string; p_photos?: string[]; p_category?: string }
+        Returns: string
+      }
+      close_community_post: { Args: { p_id: string; p_status: string }; Returns: undefined }
+      remove_community_post: { Args: { p_id: string; p_reason?: string }; Returns: undefined }
+      get_community_posts: { Args: { p_kind?: string; p_category?: string }; Returns: Json }
+      save_campaign: {
+        Args: {
+          p_id: string | null
+          p_title: string
+          p_vendor_name?: string
+          p_description?: string
+          p_discount_text?: string
+          p_valid_until?: string
+          p_active?: boolean
+        }
+        Returns: string
+      }
+      delete_campaign: { Args: { p_id: string }; Returns: undefined }
+      get_campaigns: { Args: never; Returns: Json }
+      open_enforcement: {
+        Args: {
+          p_unit_id: string
+          p_status?: string
+          p_case_no?: string
+          p_lawyer?: string
+          p_note?: string
+        }
+        Returns: string
+      }
+      update_enforcement: {
+        Args: {
+          p_case_id: string
+          p_status?: string
+          p_case_no?: string
+          p_lawyer?: string
+          p_note?: string
+        }
+        Returns: undefined
+      }
+      get_enforcement_cases: {
+        Args: { p_include_closed?: boolean }
+        Returns: {
+          id: string
+          unit_id: string
+          block: string
+          apartment_number: string
+          debtor_name: string
+          status: string
+          case_no: string
+          lawyer: string
+          debt_at_open: number
+          current_debt: number
+          note: string
+          opened_at: string
+          closed_at: string
+        }[]
+      }
+      save_budget: {
+        Args: { p_year: number; p_name?: string; p_note?: string }
+        Returns: string
+      }
+      save_budget_line: {
+        Args: {
+          p_budget_id: string
+          p_label: string
+          p_annual_amount: number
+          p_distribution?: string
+          p_charge_type_id?: string
+          p_line_id?: string
+          p_note?: string
+        }
+        Returns: string
+      }
+      delete_budget_line: { Args: { p_line_id: string }; Returns: undefined }
+      get_budget_report: {
+        Args: { p_budget_id: string }
+        Returns: {
+          line_id: string
+          label: string
+          distribution: string
+          charge_type_id: string
+          charge_type_name: string
+          planned_annual: number
+          planned_monthly: number
+          accrued_ytd: number
+          remaining: number
+        }[]
+      }
+      generate_accruals_from_budget: {
+        Args: { p_budget_id: string; p_period_month: number; p_period_year: number; p_due_date: string }
+        Returns: Json
+      }
+      create_company: {
+        Args: {
+          p_address?: string
+          p_email?: string
+          p_name: string
+          p_phone?: string
+          p_tax_office?: string
+          p_vkn?: string
+        }
+        Returns: string
+      }
+      switch_active_company: { Args: { p_company_id: string }; Returns: string }
+      get_my_companies: {
+        Args: never
+        Returns: {
+          company_id: string
+          is_active_company: boolean
+          name: string
+          role: string
+          site_count: number
+          vkn: string
+        }[]
+      }
+      link_site_to_company: {
+        Args: { p_company_id: string; p_site_id: string }
+        Returns: undefined
+      }
+      unlink_site_from_company: { Args: { p_site_id: string }; Returns: undefined }
+      get_company_portfolio: {
+        Args: { p_company_id?: string }
+        Returns: {
+          accrued_total: number
+          bank_balance: number
+          cash_balance: number
+          collected_total: number
+          open_debt: number
+          site_id: string
+          site_name: string
+        }[]
+      }
       _allocate_collection_core: {
         Args: { p_collection_id: string }
         Returns: number
