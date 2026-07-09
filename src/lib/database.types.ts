@@ -19,6 +19,7 @@ export type Database = {
           amount: number
           charge_type_id: string | null
           created_at: string | null
+          debtor_type: string
           debtor_user_id: string | null
           description: string | null
           due_date: string
@@ -28,7 +29,7 @@ export type Database = {
           principal_remaining: number
           site_id: string
           status: string
-          unit_id: string | null
+          unit_id: string
           waive_reason: string | null
           waived_at: string | null
           waived_by: string | null
@@ -37,6 +38,7 @@ export type Database = {
           amount: number
           charge_type_id?: string | null
           created_at?: string | null
+          debtor_type: string
           debtor_user_id?: string | null
           description?: string | null
           due_date: string
@@ -46,7 +48,7 @@ export type Database = {
           principal_remaining: number
           site_id: string
           status?: string
-          unit_id?: string | null
+          unit_id: string
           waive_reason?: string | null
           waived_at?: string | null
           waived_by?: string | null
@@ -55,6 +57,7 @@ export type Database = {
           amount?: number
           charge_type_id?: string | null
           created_at?: string | null
+          debtor_type?: string
           debtor_user_id?: string | null
           description?: string | null
           due_date?: string
@@ -64,7 +67,7 @@ export type Database = {
           principal_remaining?: number
           site_id?: string
           status?: string
-          unit_id?: string | null
+          unit_id?: string
           waive_reason?: string | null
           waived_at?: string | null
           waived_by?: string | null
@@ -2537,6 +2540,7 @@ export type Database = {
         Args: {
           p_amount: number
           p_charge_type_id: string
+          p_debtor_type?: string
           p_distribution: string
           p_due_date: string
           p_period_month: number
@@ -2587,6 +2591,17 @@ export type Database = {
         Returns: boolean
       }
       clear_auth_rate_limit: { Args: { p_key: string }; Returns: undefined }
+      create_unit_accrual: {
+        Args: {
+          p_amount: number
+          p_charge_type_id: string
+          p_debtor_type: string
+          p_description?: string
+          p_due_date: string
+          p_unit_id: string
+        }
+        Returns: string
+      }
       end_tenancy: {
         Args: { p_end_date?: string; p_tenancy_id: string }
         Returns: undefined
@@ -2595,6 +2610,7 @@ export type Database = {
         Args: {
           p_amount: number
           p_charge_type_id: string
+          p_debtor_type?: string
           p_distribution: string
           p_due_date: string
           p_period_month: number
