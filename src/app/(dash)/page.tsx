@@ -1,4 +1,6 @@
 import Link from 'next/link';
+import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
 import { requireManager } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
 import { PageHeader, StatCard, Card, EmptyState, Badge } from '@/components/ui';
@@ -10,6 +12,15 @@ export default async function DashboardPage() {
   const manager = await requireManager();
   const sb = await supabaseServer();
   const siteId = manager.siteId;
+
+  // Onboarding: sitede hiç daire yoksa ilk veri girişine yönlendir ("Şimdilik atla" çerezi hariç).
+  if (!manager.readOnly) {
+    const { count: unitCount } = await sb
+      .from('units').select('*', { count: 'exact', head: true }).eq('site_id', siteId);
+    if ((unitCount ?? 0) === 0 && (await cookies()).get('onboarding-skip')?.value !== '1') {
+      redirect('/onboarding');
+    }
+  }
 
   const now = new Date();
   const month = now.getMonth() + 1;

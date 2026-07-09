@@ -1,12 +1,16 @@
 import { requireManager } from '@/lib/session';
+import { supabaseServer } from '@/lib/supabaseServer';
 import { PageHeader, Card } from '@/components/ui';
-import { ImportPanel } from '@/components/ImportPanel';
+import { BulkImportWizard } from '@/components/BulkImportWizard';
 import { ExportButton } from '@/components/ExportButton';
 
 export const dynamic = 'force-dynamic';
 
 export default async function ExcelPage() {
   const manager = await requireManager();
+  const sb = await supabaseServer();
+  const { data: existingUnits } = await sb
+    .from('units').select('block, apartment_number').eq('site_id', manager.siteId);
 
   return (
     <>
@@ -28,7 +32,7 @@ export default async function ExcelPage() {
       ) : (
         <div>
           <h2 className="mb-3 text-lg font-bold text-slate-900">Toplu İçe Aktarma — Daire & Sakin</h2>
-          <ImportPanel />
+          <BulkImportWizard existing={existingUnits ?? []} />
         </div>
       )}
     </>

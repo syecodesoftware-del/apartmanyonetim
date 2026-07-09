@@ -1,37 +1,38 @@
 import * as XLSX from 'xlsx';
 
-/** Modül 4 — Excel ekosistemi ortak yardımcıları (manager-panel).
- *  Şablon başlıkları Türkçe; TC doğrulaması DB'deki is_valid_tc ile birebir. */
+/** Excel ekosistemi ortak yardımcıları (manager-panel).
+ *  Onboarding toplu daire aktarımı: geniş format — 1 satır = 1 daire (malik + kiracı aynı satırda).
+ *  TC opsiyonel (doluysa checksum); telefon TR normalizasyonu; doğrulama editörde canlı yeniden koşar. */
 
-export const IMPORT_HEADERS = ['Blok', 'Daire No', 'Kat', 'Arsa Payı', 'Sakin Tipi', 'Ad Soyad', 'TC Kimlik', 'Telefon'] as const;
+export const IMPORT_HEADERS = [
+  'Blok', 'Daire No', 'Kat', 'Arsa Payı', 'm²',
+  'Mülk Sahibi Ad Soyad', 'Malik TC', 'Malik Telefon',
+  'Kiracı Ad Soyad', 'Kiracı TC', 'Kiracı Telefon',
+] as const;
 
-export type Resident = { relationship: 'malik' | 'kiraci'; full_name: string; tc_kimlik: string; phone: string | null };
-export type ImportUnit = {
-  block: string | null;
+/** Editörde tutulan ham satır — tüm alanlar string, dönüşüm gönderimde yapılır. */
+export type ImportRow = {
+  key: number; // React satır kimliği (Excel satır no değil; editörde ekleme/silme olur)
+  block: string;
   apartment_number: string;
-  floor: number | null;
-  arsa_payi: number | null;
-  residents: Resident[];
+  floor: string;
+  arsa_payi: string;
+  m2: string;
+  malik_name: string;
+  malik_tc: string;
+  malik_phone: string;
+  kiraci_name: string;
+  kiraci_tc: string;
+  kiraci_phone: string;
 };
 
-export type ParsedRow = {
-  rowIndex: number; // gerçek Excel satır no (1 = başlık; ilk veri satırı 2)
-  block: string | null;
-  apartment_number: string;
-  floor: number | null;
-  arsa_payi: number | null;
-  relationship: 'malik' | 'kiraci' | null;
-  rawRelationship: string;
-  full_name: string;
-  tc_kimlik: string;
-  phone: string | null;
+export type ImportField = Exclude<keyof ImportRow, 'key'>;
+
+export type ValidatedRow = ImportRow & {
   errors: string[];
-};
-
-export type ParseResult = {
-  rows: ParsedRow[];
-  units: ImportUnit[];
-  errorCount: number;
+  errorFields: ImportField[];
+  /** Aynı Blok+Daire No sitede zaten kayıtlı → içe aktarmada atlanır (hata değil). */
+  exists: boolean;
 };
 
 /** Türk TC Kimlik No resmi algoritma doğrulaması (DB is_valid_tc birebir). */
@@ -45,104 +46,199 @@ export function isValidTc(tc: string): boolean {
   return d[10] === firstTen % 10;
 }
 
-function normRelationship(raw: string): 'malik' | 'kiraci' | null {
-  const v = (raw ?? '').toString().trim().toLowerCase();
-  if (['malik', 'owner', 'mülk sahibi', 'mulk sahibi', 'ev sahibi'].includes(v)) return 'malik';
-  if (['kiraci', 'kiracı', 'tenant'].includes(v)) return 'kiraci';
-  return null;
+/** TR cep telefonu → "5xxxxxxxxx" (10 hane). Kabul: 05xx…, +90 5xx…, 90 5xx…, 5xx…. Geçersizse null. */
+export function normalizePhoneTR(raw: string): string | null {
+  let d = (raw ?? '').replace(/\D/g, '');
+  if (d.startsWith('0090')) d = d.slice(4);
+  if (d.length === 12 && d.startsWith('90')) d = d.slice(2);
+  if (d.length === 11 && d.startsWith('0')) d = d.slice(1);
+  return d.length === 10 && d.startsWith('5') ? d : null;
 }
 
-const s = (v: unknown): string => (v === null || v === undefined ? '' : String(v).trim());
+/** Blok+Daire No eşleşme anahtarı — hem dosya-içi tekrar hem DB "zaten var" kontrolü bununla yapılır. */
+export const unitKey = (block: string, apt: string) =>
+  `${(block ?? '').trim().toLocaleLowerCase('tr-TR')}|||${(apt ?? '').trim().toLocaleLowerCase('tr-TR')}`;
 
-/** Yüklenen Excel'i satır satır parse + doğrula, sonra daire bazında grupla. */
-export function parseImportWorkbook(data: ArrayBuffer): ParseResult {
+export const emptyImportRow = (key: number): ImportRow => ({
+  key, block: '', apartment_number: '', floor: '', arsa_payi: '', m2: '',
+  malik_name: '', malik_tc: '', malik_phone: '', kiraci_name: '', kiraci_tc: '', kiraci_phone: '',
+});
+
+const numOk = (v: string) => Number.isFinite(Number(v.replace(',', '.')));
+
+/** Tüm satırları doğrular; editörde her değişiklikte yeniden koşar (dosya-içi tekrar dahil). */
+export function validateRows(rows: ImportRow[], existingKeys: Set<string>): ValidatedRow[] {
+  const seen = new Map<string, number>(); // unitKey -> ilk görüldüğü satır index'i
+  return rows.map((r, i) => {
+    const errors: string[] = [];
+    const errorFields: ImportField[] = [];
+    const err = (f: ImportField, m: string) => { errors.push(m); errorFields.push(f); };
+
+    const apt = r.apartment_number.trim();
+    if (!apt) err('apartment_number', 'Daire No boş');
+    if (!r.malik_name.trim()) err('malik_name', 'Mülk Sahibi boş (her dairede malik zorunlu)');
+
+    if (r.malik_tc.trim() && !isValidTc(r.malik_tc.trim())) err('malik_tc', 'Malik TC geçersiz');
+    if (r.kiraci_tc.trim() && !isValidTc(r.kiraci_tc.trim())) err('kiraci_tc', 'Kiracı TC geçersiz');
+    if (r.malik_phone.trim() && !normalizePhoneTR(r.malik_phone)) err('malik_phone', 'Malik telefon geçersiz (5xx ile 10 hane)');
+    if (r.kiraci_phone.trim() && !normalizePhoneTR(r.kiraci_phone)) err('kiraci_phone', 'Kiracı telefon geçersiz (5xx ile 10 hane)');
+
+    if (!r.kiraci_name.trim() && (r.kiraci_tc.trim() || r.kiraci_phone.trim())) {
+      err('kiraci_name', 'Kiracı Ad Soyad boş (TC/telefon girilmiş)');
+    }
+
+    if (r.floor.trim() && !Number.isInteger(Number(r.floor.trim()))) err('floor', 'Kat tam sayı olmalı');
+    if (r.arsa_payi.trim() && !numOk(r.arsa_payi.trim())) err('arsa_payi', 'Arsa Payı sayısal değil');
+    if (r.m2.trim() && !numOk(r.m2.trim())) err('m2', 'm² sayısal değil');
+
+    let exists = false;
+    if (apt) {
+      const key = unitKey(r.block, apt);
+      const first = seen.get(key);
+      if (first !== undefined) err('apartment_number', `Aynı daire dosyada tekrar ediyor (${first + 1}. satırla aynı)`);
+      else seen.set(key, i);
+      exists = existingKeys.has(key);
+    }
+
+    return { ...r, errors, errorFields, exists };
+  });
+}
+
+// Başlık eşleme: normalize edilmiş başlık → alan (şablon + yaygın eşanlamlılar)
+const HEADER_ALIASES: Record<string, ImportField> = {
+  'blok': 'block', 'blokadi': 'block', 'ada': 'block', 'bina': 'block',
+  'daireno': 'apartment_number', 'daire': 'apartment_number', 'kapino': 'apartment_number',
+  'bagimsizbolum': 'apartment_number', 'bagimsizbolumno': 'apartment_number', 'no': 'apartment_number',
+  'kat': 'floor',
+  'arsapayi': 'arsa_payi',
+  'm2': 'm2', 'metrekare': 'm2', 'brutm2': 'm2',
+  'mulksahibiadsoyad': 'malik_name', 'mulksahibi': 'malik_name', 'malikadsoyad': 'malik_name', 'malik': 'malik_name', 'evsahibi': 'malik_name',
+  'maliktc': 'malik_tc', 'mulksahibitc': 'malik_tc', 'maliktckimlik': 'malik_tc',
+  'maliktelefon': 'malik_phone', 'mulksahibitelefon': 'malik_phone', 'maliktel': 'malik_phone',
+  'kiraciadsoyad': 'kiraci_name', 'kiraci': 'kiraci_name',
+  'kiracitc': 'kiraci_tc', 'kiracitckimlik': 'kiraci_tc',
+  'kiracitelefon': 'kiraci_phone', 'kiracitel': 'kiraci_phone',
+};
+
+const normHeader = (h: string) =>
+  h.toLocaleLowerCase('tr-TR')
+    .replace(/[çÇ]/g, 'c').replace(/[ğĞ]/g, 'g').replace(/[ıİi]/g, 'i')
+    .replace(/[öÖ]/g, 'o').replace(/[şŞ]/g, 's').replace(/[üÜ]/g, 'u')
+    .replace(/[²]/g, '2')
+    .replace(/[^a-z0-9]/g, '');
+
+/** Yüklenen Excel'in ilk sayfasını editör satırlarına çevirir (doğrulama editörde yapılır). */
+export function parseImportWorkbook(data: ArrayBuffer): ImportRow[] {
   const wb = XLSX.read(data, { type: 'array' });
   const sheet = wb.Sheets[wb.SheetNames[0]];
-  const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '' });
+  if (!sheet) throw new Error('Dosyada okunacak sayfa yok');
+  const aoa = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: '', raw: false, blankrows: false });
+  if (aoa.length < 2) throw new Error('Dosyada başlık satırından başka veri yok');
 
-  const rows: ParsedRow[] = json.map((r, i) => {
-    const block = s(r['Blok']) || null;
-    const apartment_number = s(r['Daire No']);
-    const floorRaw = s(r['Kat']);
-    const arsaRaw = s(r['Arsa Payı']);
-    const rawRelationship = s(r['Sakin Tipi']);
-    const relationship = normRelationship(rawRelationship);
-    const full_name = s(r['Ad Soyad']);
-    const tc_kimlik = s(r['TC Kimlik']);
-    const phone = s(r['Telefon']) || null;
-
-    const errors: string[] = [];
-    if (!apartment_number) errors.push('Daire No boş');
-    if (!rawRelationship) errors.push('Sakin Tipi boş');
-    else if (!relationship) errors.push(`Geçersiz Sakin Tipi "${rawRelationship}" (malik/kiracı)`);
-    if (!full_name) errors.push('Ad Soyad boş');
-    if (!tc_kimlik) errors.push('TC Kimlik boş');
-    else if (!isValidTc(tc_kimlik)) errors.push('TC Kimlik geçersiz');
-    if (floorRaw && !Number.isFinite(Number(floorRaw))) errors.push('Kat sayısal değil');
-    if (arsaRaw && !Number.isFinite(Number(arsaRaw.replace(',', '.')))) errors.push('Arsa Payı sayısal değil');
-
-    return {
-      rowIndex: i + 2,
-      block,
-      apartment_number,
-      floor: floorRaw ? Number(floorRaw) : null,
-      arsa_payi: arsaRaw ? Number(arsaRaw.replace(',', '.')) : null,
-      relationship,
-      rawRelationship,
-      full_name,
-      tc_kimlik,
-      phone,
-      errors,
-    };
+  const col: Partial<Record<ImportField, number>> = {};
+  (aoa[0] as unknown[]).forEach((h, i) => {
+    const f = HEADER_ALIASES[normHeader(String(h ?? ''))];
+    if (f && col[f] === undefined) col[f] = i;
   });
-
-  // Daire bazında grupla (Blok + Daire No anahtarı)
-  const map = new Map<string, ImportUnit>();
-  for (const r of rows) {
-    if (!r.apartment_number) continue;
-    const key = `${r.block ?? ''}|||${r.apartment_number}`;
-    let u = map.get(key);
-    if (!u) {
-      u = { block: r.block, apartment_number: r.apartment_number, floor: r.floor, arsa_payi: r.arsa_payi, residents: [] };
-      map.set(key, u);
-    } else {
-      // Aynı dairenin sonraki satırları: boş alan tamamlanır, dolu ve farklıysa hata (sessiz ilk-satır-kazanır yerine)
-      if (u.floor === null && r.floor !== null) u.floor = r.floor;
-      else if (r.floor !== null && u.floor !== null && r.floor !== u.floor) r.errors.push(`Kat çelişiyor (dairede ${u.floor}, bu satırda ${r.floor})`);
-      if (u.arsa_payi === null && r.arsa_payi !== null) u.arsa_payi = r.arsa_payi;
-      else if (r.arsa_payi !== null && u.arsa_payi !== null && r.arsa_payi !== u.arsa_payi) r.errors.push(`Arsa Payı çelişiyor (dairede ${u.arsa_payi}, bu satırda ${r.arsa_payi})`);
-    }
-    if (r.relationship) {
-      u.residents.push({ relationship: r.relationship, full_name: r.full_name, tc_kimlik: r.tc_kimlik, phone: r.phone });
-    }
+  if (col.apartment_number === undefined) {
+    throw new Error('"Daire No" sütunu bulunamadı. Lütfen örnek şablondaki başlıkları kullanın.');
   }
 
-  // Daire bazlı kural: her daire en az bir malik
-  for (const u of map.values()) {
-    const hasMalik = u.residents.some((x) => x.relationship === 'malik');
-    if (!hasMalik) {
-      for (const r of rows) {
-        if ((r.block ?? '') === (u.block ?? '') && r.apartment_number === u.apartment_number) {
-          r.errors.push('Bu dairede malik yok (her daire en az bir malik içermeli)');
-        }
-      }
-    }
-  }
+  const get = (r: unknown[], f: ImportField) => (col[f] === undefined ? '' : String(r[col[f]!] ?? '').trim());
 
-  const errorCount = rows.reduce((a, r) => a + (r.errors.length > 0 ? 1 : 0), 0);
-  return { rows, units: Array.from(map.values()), errorCount };
+  return aoa.slice(1)
+    .map((r, i): ImportRow => ({
+      key: i + 1,
+      block: get(r, 'block'),
+      apartment_number: get(r, 'apartment_number'),
+      floor: get(r, 'floor'),
+      arsa_payi: get(r, 'arsa_payi'),
+      m2: get(r, 'm2'),
+      malik_name: get(r, 'malik_name'),
+      malik_tc: get(r, 'malik_tc'),
+      malik_phone: get(r, 'malik_phone'),
+      kiraci_name: get(r, 'kiraci_name'),
+      kiraci_tc: get(r, 'kiraci_tc'),
+      kiraci_phone: get(r, 'kiraci_phone'),
+    }))
+    .filter((r) => r.block || r.apartment_number || r.malik_name || r.kiraci_name || r.malik_tc || r.kiraci_tc);
 }
 
-/** Boş şablon (.xlsx) — başlık satırı + 2 örnek satır, indirilir. */
+/** RPC'ye giden daire satırı (bulk_import_units_residents v2 sözleşmesi). */
+export type RpcUnitRow = {
+  block: string | null;
+  apartment_number: string;
+  floor: number | null;
+  arsa_payi: number | null;
+  m2: number | null;
+  malik: { full_name: string; tc_kimlik: string | null; phone: string | null };
+  kiraci: { full_name: string; tc_kimlik: string | null; phone: string | null } | null;
+};
+
+/** Hatası olmayan ve DB'de zaten var olmayan satırları RPC yüküne çevirir. */
+export function toRpcRows(rows: ValidatedRow[]): RpcUnitRow[] {
+  return rows
+    .filter((r) => r.errors.length === 0 && !r.exists)
+    .map((r) => ({
+      block: r.block.trim() || null,
+      apartment_number: r.apartment_number.trim(),
+      floor: r.floor.trim() ? Number(r.floor.trim()) : null,
+      arsa_payi: r.arsa_payi.trim() ? Number(r.arsa_payi.trim().replace(',', '.')) : null,
+      m2: r.m2.trim() ? Number(r.m2.trim().replace(',', '.')) : null,
+      malik: {
+        full_name: r.malik_name.trim(),
+        tc_kimlik: r.malik_tc.trim() || null,
+        phone: normalizePhoneTR(r.malik_phone),
+      },
+      kiraci: r.kiraci_name.trim()
+        ? {
+            full_name: r.kiraci_name.trim(),
+            tc_kimlik: r.kiraci_tc.trim() || null,
+            phone: normalizePhoneTR(r.kiraci_phone),
+          }
+        : null,
+    }));
+}
+
+/** Şablon (.xlsx): "Daireler" sayfası (başlık + 3 örnek satır) + "Nasıl Doldurulur" açıklama sayfası. */
 export function buildTemplateBlob(): Blob {
-  const rows = [
-    { Blok: 'A', 'Daire No': '1', Kat: 2, 'Arsa Payı': 10, 'Sakin Tipi': 'malik', 'Ad Soyad': 'Örnek Malik', 'TC Kimlik': '10000000146', Telefon: '5551112233' },
-    { Blok: 'A', 'Daire No': '1', Kat: 2, 'Arsa Payı': 10, 'Sakin Tipi': 'kiracı', 'Ad Soyad': 'Örnek Kiracı', 'TC Kimlik': '10000000146', Telefon: '5552223344' },
-  ];
-  const ws = XLSX.utils.json_to_sheet(rows, { header: IMPORT_HEADERS as unknown as string[] });
-  ws['!cols'] = IMPORT_HEADERS.map(() => ({ wch: 16 }));
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Daire-Sakin');
+
+  const dataRows = [
+    [...IMPORT_HEADERS],
+    ['A', '1', '1', '10', '120', 'Ali Yılmaz', '10000000146', '5551112233', 'Ayşe Demir', '', '5552223344'],
+    ['A', '2', '1', '10', '120', 'Mehmet Kaya', '', '5553334455', '', '', ''],
+    ['B', '1', '2', '12', '145', 'Fatma Çelik', '', '', 'Can Aydın', '', '5554445566'],
+  ];
+  const ws = XLSX.utils.aoa_to_sheet(dataRows);
+  ws['!cols'] = IMPORT_HEADERS.map((h) => ({ wch: Math.max(12, h.length + 4) }));
+  XLSX.utils.book_append_sheet(wb, ws, 'Daireler');
+
+  const help = [
+    ['NASIL DOLDURULUR?'],
+    [''],
+    ['Her satır BİR dairedir. Mülk sahibi ve (varsa) kiracı aynı satıra yazılır.'],
+    [''],
+    ['Sütun', 'Zorunlu mu?', 'Açıklama'],
+    ['Blok', 'Hayır', 'Blok/bina adı (A, B, C blok…). Tek bloklu apartmanda boş bırakın. Yeni blok adları otomatik oluşturulur.'],
+    ['Daire No', 'EVET', 'Dairenin kapı numarası. Aynı blokta iki kez yazılamaz.'],
+    ['Kat', 'Hayır', 'Tam sayı (zemin için 0, bodrum için -1 yazılabilir).'],
+    ['Arsa Payı', 'Hayır', 'Sayı (virgüllü olabilir). Arsa paylı aidat dağıtımında kullanılır.'],
+    ['m²', 'Hayır', 'Dairenin metrekaresi (sayı).'],
+    ['Mülk Sahibi Ad Soyad', 'EVET', 'Her dairenin bir mülk sahibi olmalıdır.'],
+    ['Malik TC', 'Hayır', 'Doldurursanız geçerli bir TC Kimlik No olmalıdır (11 hane).'],
+    ['Malik Telefon', 'Hayır', '5xx xxx xx xx biçiminde cep telefonu. 0 veya +90 ile de yazabilirsiniz.'],
+    ['Kiracı Ad Soyad', 'Hayır', 'Dairede kiracı oturuyorsa yazın; malik oturuyorsa boş bırakın.'],
+    ['Kiracı TC', 'Hayır', 'Doldurursanız geçerli olmalıdır.'],
+    ['Kiracı Telefon', 'Hayır', 'Kiracının cep telefonu.'],
+    [''],
+    ['Yükledikten sonra tüm satırları ekranda görecek, düzeltme/ekleme/silme yapabileceksiniz.'],
+    ['Hiçbir kayıt siz "İçe Aktar" butonuna basmadan oluşturulmaz.'],
+  ];
+  const wsHelp = XLSX.utils.aoa_to_sheet(help);
+  wsHelp['!cols'] = [{ wch: 24 }, { wch: 12 }, { wch: 95 }];
+  XLSX.utils.book_append_sheet(wb, wsHelp, 'Nasıl Doldurulur');
+
   const out = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
   return new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
 }
