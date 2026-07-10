@@ -140,7 +140,7 @@ export default async function DashboardPage() {
           centerValue={`%${paidPct}`}
           centerLabel="tahsilat oranı"
           emptyText="Bu ay için tahakkuk yok — Tahakkuk & Aidat ekranından üretebilirsiniz."
-          valueFmt={(v) => `${v} daire`}
+          unit="daire"
         />
         <DonutCard
           title="Açık Borç Yaşlandırma"
@@ -152,7 +152,7 @@ export default async function DashboardPage() {
           centerValue={tl(totalOpenDebt)}
           centerLabel="açık anapara"
           emptyText="Açık borç yok 🎉"
-          valueFmt={tl}
+          unit="tl"
         />
       </div>
 

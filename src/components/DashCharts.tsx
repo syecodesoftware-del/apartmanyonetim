@@ -28,15 +28,17 @@ function arcPath(cx: number, cy: number, rOut: number, rIn: number, a0: number, 
   return `M ${x0} ${y0} A ${rOut} ${rOut} 0 ${large} 1 ${x1} ${y1} L ${x2} ${y2} A ${rIn} ${rIn} 0 ${large} 0 ${x3} ${y3} Z`;
 }
 
-export function DonutCard({ title, slices, centerLabel, centerValue, emptyText, valueFmt }: {
+export function DonutCard({ title, slices, centerLabel, centerValue, emptyText, unit }: {
   title: string;
   slices: DonutSlice[];
   centerLabel: string;
   centerValue: string;
   emptyText: string;
-  /** Dilim değeri biçimleyici (adet ya da ₺) */
-  valueFmt: (v: number) => string;
+  /** Dilim değeri biçimi — server→client'a fonksiyon geçirilemediği için ayırt edici string */
+  unit: 'daire' | 'tl';
 }) {
+  const valueFmt = (v: number) =>
+    unit === 'tl' ? `₺${Math.round(v).toLocaleString('tr-TR')}` : `${v} daire`;
   const [hover, setHover] = useState<number | null>(null);
   const total = slices.reduce((s, x) => s + x.value, 0);
   const visible = slices.filter((s) => s.value > 0);
