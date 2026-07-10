@@ -11,7 +11,7 @@ export type NavItem = {
 /** Düz, kısa menü — her satır bir iş alanı. İlişkili alt ekranlar sayfa üstündeki
  *  sekme çubuğundan (ClusterTabs) erişilir; hiçbir eski rota silinmedi. */
 export const NAV_ITEMS: NavItem[] = [
-  { href: '/', label: 'Panel', icon: '📊' },
+  { href: '/', label: 'Özet Ekranı', icon: '📊' },
   {
     href: '/units', label: 'Daireler & Sakinler', icon: '🏠',
     match: ['/units', '/residents', '/balances', '/unpaid', '/onboarding'],
