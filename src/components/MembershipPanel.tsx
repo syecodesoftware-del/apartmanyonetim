@@ -84,19 +84,7 @@ export function MembershipPanel({ pending, invitations, candidates, siteId, mana
 
   return (
     <div className="space-y-4">
-      <Card
-        title={`Onay Bekleyen Başvurular (${pending.length})`}
-        action={!ro ? (
-          <div className="flex items-center gap-2">
-            <button onClick={() => setBulkOpen(true)} className="rounded-lg border border-blue-300 px-3 py-1.5 text-xs font-semibold text-blue-700 transition hover:bg-blue-50">
-              📥 Toplu Davet
-            </button>
-            <button onClick={() => setInviteOpen(true)} className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-blue-700">
-              + Yeni Davet
-            </button>
-          </div>
-        ) : undefined}
-      >
+      <Card title={`Onay Bekleyen Başvurular (${pending.length})`}>
         {pending.length === 0 ? (
           <EmptyState>Bekleyen başvuru yok 🎉</EmptyState>
         ) : (
@@ -124,7 +112,19 @@ export function MembershipPanel({ pending, invitations, candidates, siteId, mana
         )}
       </Card>
 
-      <Card title={`Davetler (${invitations.length})`}>
+      <Card
+        title={`Davetler (${invitations.length})`}
+        action={!ro ? (
+          <div className="flex items-center gap-2">
+            <button onClick={() => setBulkOpen(true)} className="rounded-lg border border-blue-300 px-3 py-1.5 text-xs font-semibold text-blue-700 transition hover:bg-blue-50">
+              📥 Toplu Davet
+            </button>
+            <button onClick={() => setInviteOpen(true)} className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-blue-700">
+              + Yeni Davet
+            </button>
+          </div>
+        ) : undefined}
+      >
         <p className="mb-3 text-xs text-slate-400">T.C. ile önceden tanımlanan kişi, uygulamaya kayıt olduğunda onay beklemeden otomatik aktifleşir.</p>
         {invitations.length === 0 ? (
           <EmptyState>Henüz davet oluşturulmadı.</EmptyState>
