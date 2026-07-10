@@ -6,6 +6,7 @@ import { supabaseBrowser } from '@/lib/supabaseBrowser';
 import { Card, Table, Th, Td, EmptyState, Badge } from '@/components/ui';
 import { inputCls, Modal, Field } from '@/components/UnitsPanel';
 import { useReadOnly } from '@/components/ReadOnly';
+import { BulkInviteModal, type InviteCandidate } from '@/components/BulkInviteModal';
 import { ROLE_LABEL, date } from '@/lib/format';
 
 export type PendingRow = {
@@ -47,9 +48,10 @@ function unitText(block: string | null, apt: string | null) {
   return [block, apt].filter(Boolean).join(' / ') || 'Daire belirtilmemiş';
 }
 
-export function MembershipPanel({ pending, invitations, siteId, managerId, autoOpenInvite }: {
+export function MembershipPanel({ pending, invitations, candidates, siteId, managerId, autoOpenInvite }: {
   pending: PendingRow[];
   invitations: InvitationRow[];
+  candidates: InviteCandidate[];
   siteId: string;
   managerId: string;
   autoOpenInvite?: boolean;
@@ -59,6 +61,7 @@ export function MembershipPanel({ pending, invitations, siteId, managerId, autoO
 
   // Popup durumları
   const [inviteOpen, setInviteOpen] = useState(!ro && !!autoOpenInvite);
+  const [bulkOpen, setBulkOpen] = useState(false);
   const [reviewing, setReviewing] = useState<PendingRow | null>(null);
   const [cancelTarget, setCancelTarget] = useState<InvitationRow | null>(null);
 
@@ -84,9 +87,14 @@ export function MembershipPanel({ pending, invitations, siteId, managerId, autoO
       <Card
         title={`Onay Bekleyen Başvurular (${pending.length})`}
         action={!ro ? (
-          <button onClick={() => setInviteOpen(true)} className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-blue-700">
-            + Yeni Davet
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setBulkOpen(true)} className="rounded-lg border border-blue-300 px-3 py-1.5 text-xs font-semibold text-blue-700 transition hover:bg-blue-50">
+              📥 Toplu Davet
+            </button>
+            <button onClick={() => setInviteOpen(true)} className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-blue-700">
+              + Yeni Davet
+            </button>
+          </div>
         ) : undefined}
       >
         {pending.length === 0 ? (
@@ -155,6 +163,15 @@ export function MembershipPanel({ pending, invitations, siteId, managerId, autoO
       </Card>
 
       {inviteOpen && <NewInvitationModal siteId={siteId} managerId={managerId} onClose={closeInvite} />}
+      {bulkOpen && (
+        <BulkInviteModal
+          candidates={candidates}
+          invitations={invitations}
+          siteId={siteId}
+          managerId={managerId}
+          onClose={() => setBulkOpen(false)}
+        />
+      )}
       {reviewing && <ApplicationReviewModal row={reviewing} readOnly={ro} onClose={() => setReviewing(null)} />}
       {cancelTarget && <CancelInvitationModal invitation={cancelTarget} onClose={() => setCancelTarget(null)} />}
     </div>

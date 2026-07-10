@@ -243,6 +243,99 @@ export function buildTemplateBlob(): Blob {
   return new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
 }
 
+/* ── Toplu davet (Başvuru & Davetler → Toplu Davet) ─────────────────────── */
+
+export const INVITE_HEADERS = ['Ad Soyad', 'TC Kimlik', 'Blok', 'Daire No', 'Telefon', 'E-posta'] as const;
+
+export type InviteRow = {
+  key: number;
+  full_name: string;
+  tc_kimlik: string;
+  block: string;
+  apartment_number: string;
+  phone: string;
+  email: string;
+};
+
+const INVITE_ALIASES: Record<string, Exclude<keyof InviteRow, 'key'>> = {
+  'adsoyad': 'full_name', 'isim': 'full_name', 'ad': 'full_name', 'adisoyadi': 'full_name',
+  'tckimlik': 'tc_kimlik', 'tc': 'tc_kimlik', 'tckimlikno': 'tc_kimlik', 'tcno': 'tc_kimlik', 'kimlikno': 'tc_kimlik',
+  'blok': 'block', 'blokadi': 'block', 'bina': 'block',
+  'daireno': 'apartment_number', 'daire': 'apartment_number', 'kapino': 'apartment_number', 'no': 'apartment_number',
+  'telefon': 'phone', 'gsm': 'phone', 'cep': 'phone', 'ceptelefonu': 'phone', 'tel': 'phone',
+  'eposta': 'email', 'email': 'email', 'mail': 'email',
+};
+
+/** Davet listesinin ilk sayfasını satırlara çevirir (doğrulama modalda yapılır). */
+export function parseInviteWorkbook(data: ArrayBuffer): InviteRow[] {
+  const wb = XLSX.read(data, { type: 'array' });
+  const sheet = wb.Sheets[wb.SheetNames[0]];
+  if (!sheet) throw new Error('Dosyada okunacak sayfa yok');
+  const aoa = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: '', raw: false, blankrows: false });
+  if (aoa.length < 2) throw new Error('Dosyada başlık satırından başka veri yok');
+
+  const col: Partial<Record<Exclude<keyof InviteRow, 'key'>, number>> = {};
+  (aoa[0] as unknown[]).forEach((h, i) => {
+    const f = INVITE_ALIASES[normHeader(String(h ?? ''))];
+    if (f && col[f] === undefined) col[f] = i;
+  });
+  if (col.full_name === undefined) {
+    throw new Error('"Ad Soyad" sütunu bulunamadı. Lütfen örnek şablondaki başlıkları kullanın.');
+  }
+
+  const get = (r: unknown[], f: Exclude<keyof InviteRow, 'key'>) =>
+    (col[f] === undefined ? '' : String(r[col[f]!] ?? '').trim());
+
+  return aoa.slice(1)
+    .map((r, i): InviteRow => ({
+      key: i + 1,
+      full_name: get(r, 'full_name'),
+      tc_kimlik: get(r, 'tc_kimlik'),
+      block: get(r, 'block'),
+      apartment_number: get(r, 'apartment_number'),
+      phone: get(r, 'phone'),
+      email: get(r, 'email'),
+    }))
+    .filter((r) => r.full_name || r.tc_kimlik || r.apartment_number);
+}
+
+/** Davet şablonu (.xlsx): "Davetler" sayfası + kısa açıklama sayfası. */
+export function buildInviteTemplateBlob(): Blob {
+  const wb = XLSX.utils.book_new();
+
+  const dataRows = [
+    [...INVITE_HEADERS],
+    ['Ali Yılmaz', '10000000146', 'A', '1', '5551112233', 'ali@example.com'],
+    ['Ayşe Demir', '', 'A', '2', '05552223344', ''],
+  ];
+  const ws = XLSX.utils.aoa_to_sheet(dataRows);
+  ws['!cols'] = INVITE_HEADERS.map((h) => ({ wch: Math.max(14, h.length + 6) }));
+  XLSX.utils.book_append_sheet(wb, ws, 'Davetler');
+
+  const help = [
+    ['NASIL DOLDURULUR?'],
+    [''],
+    ['Her satır davet edilecek BİR kişidir. Tüm davetler "Sakin" rolüyle oluşturulur.'],
+    [''],
+    ['Sütun', 'Zorunlu mu?', 'Açıklama'],
+    ['Ad Soyad', 'EVET', 'Davet edilecek kişinin adı soyadı.'],
+    ['TC Kimlik', 'Hayır', 'Doldurursanız geçerli olmalıdır; kişi kayıt olurken TC ile otomatik eşleşir. Boşsa kişi davet kodunu girmelidir.'],
+    ['Blok', 'Hayır', 'Tek bloklu apartmanda boş bırakın.'],
+    ['Daire No', 'EVET', 'Kişinin oturduğu/sahibi olduğu daire.'],
+    ['Telefon', 'Hayır', '5xx xxx xx xx biçiminde. 0 veya +90 ile de yazabilirsiniz.'],
+    ['E-posta', 'Hayır', 'Varsa e-posta adresi.'],
+    [''],
+    ['Yükledikten sonra listeyi ekranda görecek, kimlerin davet edileceğini seçeceksiniz.'],
+    ['Hiçbir davet siz onaylamadan oluşturulmaz.'],
+  ];
+  const wsHelp = XLSX.utils.aoa_to_sheet(help);
+  wsHelp['!cols'] = [{ wch: 16 }, { wch: 12 }, { wch: 100 }];
+  XLSX.utils.book_append_sheet(wb, wsHelp, 'Nasıl Doldurulur');
+
+  const out = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
+  return new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+}
+
 /** Çok-sheet'li dışa aktarma; her tablo bir sheet. */
 export function buildExportBlob(sheets: { name: string; rows: Record<string, unknown>[] }[]): Blob {
   const wb = XLSX.utils.book_new();
