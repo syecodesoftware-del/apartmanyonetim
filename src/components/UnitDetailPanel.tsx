@@ -5,8 +5,12 @@ import { useRouter } from 'next/navigation';
 import { supabaseBrowser } from '@/lib/supabaseBrowser';
 import { Card, Table, Th, Td, EmptyState, Badge } from '@/components/ui';
 import { Modal, Field, inputCls } from '@/components/UnitsPanel';
+import { Segmented } from '@/components/controls';
+import { WaiveControls } from '@/components/WaiveControls';
 import { useReadOnly } from '@/components/ReadOnly';
 import { money, date } from '@/lib/format';
+import { parseTrAmount, sanitizeAmountInput } from '@/lib/amount';
+import { friendlyDbMessage } from '@/lib/error';
 
 export type Tenancy = {
   id: string;
@@ -34,6 +38,7 @@ const emptyForm: FormState = { full_name: '', user_id: '', phone: '', tc: '', mo
 
 export function UnitDetailPanel({
   unitId,
+  siteId,
   unitLabel,
   tenancies,
   totalDebt,
@@ -43,6 +48,7 @@ export function UnitDetailPanel({
   residents,
 }: {
   unitId: string;
+  siteId: string;
   unitLabel: string;
   tenancies: Tenancy[];
   totalDebt: number;
@@ -57,6 +63,15 @@ export function UnitDetailPanel({
   const [form, setForm] = useState<FormState>({ ...emptyForm });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Tahsilat modalı (Daire 360 — tahsilat daire kartından alınır)
+  const [collectOpen, setCollectOpen] = useState(false);
+  const [amount, setAmount] = useState('');
+  // 'bank' — collections_method_check yalnız cash/bank/online/qr kabul eder
+  const [method, setMethod] = useState<'cash' | 'bank'>('cash');
+  const [collecting, setCollecting] = useState(false);
+  const [collectError, setCollectError] = useState('');
+  const [info, setInfo] = useState<string | null>(null);
 
   const currentOwner = tenancies.find((t) => t.relationship === 'malik' && !t.end_date) ?? null;
   const currentTenant = tenancies.find((t) => t.relationship === 'kiraci' && !t.end_date) ?? null;
@@ -145,6 +160,28 @@ export function UnitDetailPanel({
     router.refresh();
   }
 
+  function openCollect() {
+    setAmount(totalDebt > 0.005 ? String(Math.round(totalDebt * 100) / 100) : '');
+    setMethod('cash'); setCollectError(''); setInfo(null);
+    setCollectOpen(true);
+  }
+
+  async function collect(e: React.FormEvent) {
+    e.preventDefault();
+    const amt = parseTrAmount(amount);
+    if (!Number.isFinite(amt) || amt <= 0) { setCollectError('Geçerli bir tutar giriniz (örn. 750 veya 1.234,50).'); return; }
+    setCollecting(true); setCollectError('');
+    const { data, error } = await supabaseBrowser().rpc('record_collection', {
+      p_site_id: siteId, p_unit_id: unitId, p_amount: amt, p_method: method,
+    });
+    setCollecting(false);
+    if (error) { setCollectError(friendlyDbMessage(error.message)); return; }
+    const leftover = Number(data ?? 0);
+    setCollectOpen(false);
+    setInfo(leftover > 0 ? `Tahsilat alındı. ${money(leftover, true)} avans/artan olarak kaydedildi.` : 'Tahsilat alındı.');
+    router.refresh();
+  }
+
   async function removeOccupant(t: Tenancy) {
     const label = t.relationship === 'malik' ? 'mülk sahibini' : 'kiracıyı';
     if (!window.confirm(`Bu ${label} çıkarmak istediğinize emin misiniz?`)) return;
@@ -165,6 +202,7 @@ export function UnitDetailPanel({
 
   return (
     <div className="space-y-5">
+      {info && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">✓ {info}</p>}
       <div className="grid gap-4 sm:grid-cols-2">
         {/* MÜLK SAHİBİ */}
         <Card
@@ -245,7 +283,19 @@ export function UnitDetailPanel({
       </div>
 
       {/* GÜNCEL BORÇ DÖKÜMÜ */}
-      <Card title="Güncel Borç Dökümü">
+      <Card
+        title="Güncel Borç Dökümü"
+        action={
+          ro ? undefined : (
+            <button
+              onClick={openCollect}
+              className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-700"
+            >
+              💰 Tahsilat Al
+            </button>
+          )
+        }
+      >
         <div className="mb-4 grid grid-cols-3 gap-3">
           <div className="rounded-lg border-l-4 border-slate-300 bg-slate-50 px-3 py-2">
             <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Kalan Anapara</p>
@@ -327,6 +377,7 @@ export function UnitDetailPanel({
                 <Th className="text-right">Borç</Th>
                 <Th className="text-right">Ödeme</Th>
                 <Th className="text-right">Bakiye</Th>
+                <Th className="text-right">İşlem</Th>
               </tr>
             </thead>
             <tbody>
@@ -334,6 +385,7 @@ export function UnitDetailPanel({
                 const borc = Number(r.borc ?? 0);
                 const odeme = Number(r.odeme ?? 0);
                 const isTahsilat = r.tur === 'tahsilat';
+                const waived = r.durum === 'waived';
                 return (
                   <tr
                     key={r.id ?? i}
@@ -347,8 +399,9 @@ export function UnitDetailPanel({
                       <span className="align-middle font-medium text-slate-700">
                         {r.aciklama ?? (isTahsilat ? 'Tahsilat' : 'Tahakkuk')}
                       </span>
+                      {waived && <span className="ml-2 align-middle"><Badge tone="slate">Vazgeçildi</Badge></span>}
                     </Td>
-                    <Td className="text-right font-semibold tabular-nums text-red-600">
+                    <Td className={`text-right font-semibold tabular-nums ${waived ? 'text-slate-400 line-through' : 'text-red-600'}`}>
                       {borc > 0.005 ? money(borc, true) : <span className="font-normal text-slate-300">—</span>}
                     </Td>
                     <Td className="text-right font-semibold tabular-nums text-emerald-600">
@@ -356,6 +409,9 @@ export function UnitDetailPanel({
                     </Td>
                     <Td className={`text-right font-bold tabular-nums ${r.bakiye > 0.005 ? 'text-red-600' : 'text-emerald-600'}`}>
                       {money(r.bakiye, true)}
+                    </Td>
+                    <Td className="text-right">
+                      {r.tur === 'tahakkuk' && r.id ? <WaiveControls accrualId={r.id} durum={r.durum} /> : null}
                     </Td>
                   </tr>
                 );
@@ -404,6 +460,28 @@ export function UnitDetailPanel({
           </Table>
         )}
       </Card>
+
+      {collectOpen && (
+        <Modal title={`Tahsilat Al — ${unitLabel}`} onClose={() => setCollectOpen(false)}>
+          <p className="mb-3 text-sm text-slate-500">
+            Açık borç: <span className="font-semibold text-slate-700">{money(totalDebt, true)}</span>
+          </p>
+          <form onSubmit={collect} className="space-y-3">
+            <Field label="Tutar (₺)">
+              <input value={amount} onChange={(e) => setAmount(sanitizeAmountInput(e.target.value))} inputMode="decimal" autoFocus placeholder="örn. 750 veya 1.234,50" className={inputCls} />
+            </Field>
+            <Field label="Yöntem">
+              <Segmented value={method} onChange={setMethod} options={[{ value: 'cash', label: 'Nakit' }, { value: 'bank', label: 'Havale/EFT' }]} />
+            </Field>
+            <p className="text-xs text-slate-400">Tahsilat en eski borçtan başlanarak mahsup edilir; artan tutar avans olarak kaydedilir.</p>
+            {collectError && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{collectError}</p>}
+            <div className="flex justify-end gap-2 pt-1">
+              <button type="button" onClick={() => setCollectOpen(false)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50">Vazgeç</button>
+              <button type="submit" disabled={collecting} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60">{collecting ? 'Kaydediliyor…' : 'Tahsilatı Kaydet'}</button>
+            </div>
+          </form>
+        </Modal>
+      )}
 
       {modal && (
         <Modal

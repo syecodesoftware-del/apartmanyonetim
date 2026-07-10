@@ -21,6 +21,7 @@ export default async function UnitDetailModal({ params }: { params: Promise<{ un
     >
       <UnitDetailPanel
         unitId={data.unit.id}
+        siteId={data.unit.site_id}
         unitLabel={data.unitLabel}
         tenancies={data.tenancies}
         totalDebt={data.totalDebt}

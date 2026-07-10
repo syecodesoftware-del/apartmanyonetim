@@ -1,19 +1,34 @@
 import { requireManager } from '@/lib/session';
+import { supabaseServer } from '@/lib/supabaseServer';
 import { Sidebar } from '@/components/Sidebar';
 import { SiteSwitcher } from '@/components/SiteSwitcher';
 import { LogoutButton } from '@/components/LogoutButton';
 import { ReadOnlyProvider } from '@/components/ReadOnly';
 import { NavProvider } from '@/components/NavProvider';
 import { MobileMenuButton } from '@/components/MobileMenuButton';
+import { ClusterTabs } from '@/components/ClusterTabs';
 
 export default async function DashLayout({ children, modal }: { children: React.ReactNode; modal: React.ReactNode }) {
   const manager = await requireManager();
+  const sb = await supabaseServer();
+
+  // Menü rozetleri: bekleyen başvuru + açık şikayet
+  const [{ count: pendingApprovals }, { count: openComplaints }] = await Promise.all([
+    sb.from('users').select('*', { count: 'exact', head: true })
+      .eq('site_id', manager.siteId).eq('approval_status', 'pending'),
+    sb.from('complaints').select('*', { count: 'exact', head: true })
+      .eq('site_id', manager.siteId).in('status', ['open', 'in_progress']),
+  ]);
 
   return (
     <ReadOnlyProvider value={manager.readOnly}>
       <NavProvider>
       <div className="flex min-h-screen bg-slate-100">
-        <Sidebar siteName={manager.siteName} />
+        <Sidebar
+          siteName={manager.siteName}
+          showPortfolio={manager.memberships.length > 1}
+          badges={{ '/approvals': pendingApprovals ?? 0, '/announcements': openComplaints ?? 0 }}
+        />
         <div className="flex min-w-0 flex-1 flex-col">
           <header className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 sm:px-6">
             <div className="flex min-w-0 items-center">
@@ -39,7 +54,10 @@ export default async function DashLayout({ children, modal }: { children: React.
               Denetçi rolündesiniz: tüm veriyi görüntüleyebilir, hiçbir değişiklik yapamazsınız. Düzenleme kontrolleri gizlidir.
             </div>
           )}
-          <main className="flex-1 overflow-auto p-4 sm:p-6">{children}</main>
+          <main className="flex-1 overflow-auto p-4 sm:p-6">
+            <ClusterTabs />
+            {children}
+          </main>
           {modal}
         </div>
       </div>

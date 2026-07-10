@@ -1,86 +1,41 @@
-export type NavItem = { href: string; label: string; icon: string };
-export type NavGroup = { title: string; items: NavItem[]; defaultCollapsed?: boolean };
+export type NavItem = {
+  href: string;
+  label: string;
+  icon: string;
+  /** Bu ön eklerden biriyle eşleşen her sayfa bu sekmeyi aktif gösterir (tab kümeleri + eski rotalar). */
+  match?: string[];
+  /** Yalnız birden çok site üyeliği olan (firma) kullanıcılara gösterilir. */
+  portfolioOnly?: boolean;
+};
 
-/** Yönetici panelinin masaüstü navigasyonu — günlük işler üstte, kurulum altta. */
-export const NAV_GROUPS: NavGroup[] = [
+/** Düz, kısa menü — her satır bir iş alanı. İlişkili alt ekranlar sayfa üstündeki
+ *  sekme çubuğundan (ClusterTabs) erişilir; hiçbir eski rota silinmedi. */
+export const NAV_ITEMS: NavItem[] = [
+  { href: '/', label: 'Panel', icon: '📊' },
   {
-    title: 'Genel',
-    items: [
-      { href: '/', label: 'Panel', icon: '📊' },
-      { href: '/portfolio', label: 'Firma Portföyü', icon: '🏢' },
-    ],
+    href: '/units', label: 'Daireler & Sakinler', icon: '🏠',
+    match: ['/units', '/residents', '/balances', '/unpaid', '/onboarding'],
+  },
+  { href: '/approvals', label: 'Başvuru & Davetler', icon: '✉️', match: ['/approvals', '/invitations'] },
+  {
+    href: '/accruals', label: 'Tahakkuk & Aidat', icon: '🧾',
+    match: ['/accruals', '/charge-types', '/dues-plans', '/late-fee-policy'],
+  },
+  { href: '/cash', label: 'Kasa & Banka', icon: '🏦', match: ['/cash'] },
+  { href: '/enforcement', label: 'Takip & İcra', icon: '⚖️', match: ['/enforcement'] },
+  {
+    href: '/reports', label: 'Raporlar & Defterler', icon: '📈',
+    match: ['/reports', '/ledger', '/budget', '/documents'],
   },
   {
-    title: 'Sakinler',
-    items: [
-      { href: '/residents', label: 'Sakinler', icon: '👥' },
-      { href: '/approvals', label: 'Başvuru & Davetler', icon: '✉️' },
-      { href: '/units', label: 'Daireler', icon: '🏠' },
-    ],
+    href: '/announcements', label: 'İletişim', icon: '📣',
+    match: ['/announcements', '/messages', '/complaints', '/community'],
   },
+  { href: '/assemblies', label: 'Genel Kurul & Kararlar', icon: '🗳️', match: ['/assemblies', '/decisions'] },
   {
-    title: 'Cari & Aidat',
-    items: [
-      { href: '/balances', label: 'Borç & Tahsilat', icon: '💰' },
-      { href: '/budget', label: 'İşletme Projesi', icon: '📊' },
-      { href: '/accruals', label: 'Tahakkuk', icon: '🧾' },
-      { href: '/unpaid', label: 'Ödemeyenler', icon: '⏳' },
-      { href: '/enforcement', label: 'Takip & İcra', icon: '⚖️' },
-    ],
+    href: '/operations', label: 'Operasyon', icon: '🔧',
+    match: ['/operations', '/work-orders', '/gate', '/meters', '/inventory', '/staff', '/suppliers', '/archive'],
   },
-  {
-    title: 'Kasa & Banka',
-    items: [
-      { href: '/cash', label: 'Kasa & Banka', icon: '🏦' },
-    ],
-  },
-  {
-    title: 'Raporlar',
-    items: [
-      { href: '/reports', label: 'Rapor Merkezi', icon: '📈' },
-      { href: '/ledger', label: 'İşletme Defteri', icon: '📒' },
-      { href: '/documents', label: 'Hazır Dökümanlar', icon: '📄' },
-    ],
-  },
-  {
-    title: 'İletişim',
-    items: [
-      { href: '/announcements', label: 'Duyurular', icon: '📣' },
-      { href: '/messages', label: 'Mesajlar', icon: '💬' },
-      { href: '/community', label: 'Topluluk & Kampanya', icon: '🏪' },
-      { href: '/complaints', label: 'Şikayetler', icon: '🛠️' },
-    ],
-  },
-  {
-    title: 'Yönetişim',
-    items: [
-      { href: '/assemblies', label: 'Genel Kurul', icon: '🗳️' },
-      { href: '/decisions', label: 'Karar Defteri', icon: '📖' },
-    ],
-  },
-  {
-    title: 'Operasyon',
-    items: [
-      { href: '/gate', label: 'Kapı & Ziyaretçi', icon: '🚪' },
-      { href: '/work-orders', label: 'İş Takibi', icon: '🔧' },
-      { href: '/meters', label: 'Sayaçlar', icon: '⏲️' },
-      { href: '/inventory', label: 'Demirbaş & Envanter', icon: '📦' },
-      { href: '/staff', label: 'Personel', icon: '👷' },
-      { href: '/suppliers', label: 'Tedarikçi & Fatura', icon: '🧾' },
-      { href: '/archive', label: 'Belge Arşivi', icon: '🗂️' },
-    ],
-  },
-  {
-    // Nadir kullanılan kurulum ekranları — ilk açılışta katlı gelir.
-    title: 'Kurulum & Ayarlar',
-    defaultCollapsed: true,
-    items: [
-      { href: '/charge-types', label: 'Tahakkuk Türleri', icon: '🏷️' },
-      { href: '/dues-plans', label: 'Aidat Planları', icon: '📋' },
-      { href: '/late-fee-policy', label: 'Gecikme Politikası', icon: '⚖️' },
-      { href: '/blocks', label: 'Adalar / Bloklar', icon: '🏘️' },
-      { href: '/excel', label: 'Excel Aktarım', icon: '📥' },
-      { href: '/settings', label: 'Ayarlar', icon: '⚙️' },
-    ],
-  },
+  { href: '/portfolio', label: 'Firma Portföyü', icon: '🏢', portfolioOnly: true },
+  { href: '/settings', label: 'Ayarlar', icon: '⚙️', match: ['/settings', '/blocks', '/excel'] },
 ];

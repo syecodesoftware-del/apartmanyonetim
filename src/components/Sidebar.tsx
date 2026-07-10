@@ -1,45 +1,26 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { NAV_GROUPS } from '@/lib/nav';
+import { NAV_ITEMS } from '@/lib/nav';
 import { useNav } from '@/components/NavProvider';
 
-const STORAGE_KEY = 'ka-nav-collapsed';
-
-function isActive(pathname: string, href: string): boolean {
-  if (href === '/') return pathname === '/';
-  return pathname === href || pathname.startsWith(href + '/');
+function isActive(pathname: string, item: (typeof NAV_ITEMS)[number]): boolean {
+  if (item.href === '/') return pathname === '/';
+  const prefixes = item.match ?? [item.href];
+  return prefixes.some((p) => pathname === p || pathname.startsWith(p + '/'));
 }
 
-export function Sidebar({ siteName }: { siteName: string }) {
+export function Sidebar({ siteName, showPortfolio, badges = {} }: {
+  siteName: string;
+  showPortfolio: boolean;
+  /** href → bekleyen iş sayısı (örn. onay bekleyen başvuru, açık şikayet) */
+  badges?: Record<string, number>;
+}) {
   const pathname = usePathname();
   const { open, setOpen } = useNav();
-  // İlk açılışta defaultCollapsed gruplar katlı gelir; kullanıcı tercihi localStorage'dan sonra ezer.
-  const [collapsed, setCollapsed] = useState<Set<string>>(
-    () => new Set(NAV_GROUPS.filter((g) => g.defaultCollapsed).map((g) => g.title)),
-  );
 
-  // Kullanıcının katladığı grupları hatırla (hydration uyumu için mount sonrası oku)
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) setCollapsed(new Set(JSON.parse(raw) as string[]));
-    } catch { /* yoksay */ }
-  }, []);
-
-  function toggleGroup(title: string) {
-    setCollapsed((prev) => {
-      const next = new Set(prev);
-      if (next.has(title)) next.delete(title);
-      else next.add(title);
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify([...next]));
-      } catch { /* yoksay */ }
-      return next;
-    });
-  }
+  const items = NAV_ITEMS.filter((it) => !it.portfolioOnly || showPortfolio);
 
   const content = (
     <>
@@ -50,46 +31,27 @@ export function Sidebar({ siteName }: { siteName: string }) {
           <p className="truncate text-xs text-slate-500">{siteName}</p>
         </div>
       </div>
-      <nav className="flex-1 space-y-2 overflow-y-auto px-3 py-2">
-        {NAV_GROUPS.map((group) => {
-          const groupActive = group.items.some((it) => isActive(pathname, it.href));
-          // Aktif grup her zaman açık; aksi halde kullanıcının katlama tercihine uy
-          const isOpen = groupActive || !collapsed.has(group.title);
+      <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-2">
+        {items.map((item) => {
+          const active = isActive(pathname, item);
+          const badge = badges[item.href] ?? 0;
           return (
-            <div key={group.title}>
-              <button
-                onClick={() => toggleGroup(group.title)}
-                className="flex w-full items-center justify-between px-3 pb-1 pt-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400 transition hover:text-slate-600"
-              >
-                <span>{group.title}</span>
-                <svg
-                  width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-                  className={`transition-transform ${isOpen ? 'rotate-0' : '-rotate-90'}`}
-                >
-                  <polyline points="6 9 12 15 18 9" />
-                </svg>
-              </button>
-              {isOpen && (
-                <div className="space-y-0.5">
-                  {group.items.map((item) => {
-                    const active = isActive(pathname, item.href);
-                    return (
-                      <Link
-                        key={item.href}
-                        href={item.href}
-                        onClick={() => setOpen(false)}
-                        className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition ${
-                          active ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-50'
-                        }`}
-                      >
-                        <span className="text-base">{item.icon}</span>
-                        {item.label}
-                      </Link>
-                    );
-                  })}
-                </div>
+            <Link
+              key={item.href}
+              href={item.href}
+              onClick={() => setOpen(false)}
+              className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition ${
+                active ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              <span className="text-base">{item.icon}</span>
+              <span className="flex-1">{item.label}</span>
+              {badge > 0 && (
+                <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                  {badge > 99 ? '99+' : badge}
+                </span>
               )}
-            </div>
+            </Link>
           );
         })}
       </nav>

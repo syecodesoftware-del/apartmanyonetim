@@ -30,6 +30,7 @@ export default async function UnitDetailPage({ params }: { params: Promise<{ uni
       />
       <UnitDetailPanel
         unitId={data.unit.id}
+        siteId={data.unit.site_id}
         unitLabel={data.unitLabel}
         tenancies={data.tenancies}
         totalDebt={data.totalDebt}
