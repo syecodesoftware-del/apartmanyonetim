@@ -37,5 +37,5 @@ export const NAV_ITEMS: NavItem[] = [
     match: ['/operations', '/work-orders', '/gate', '/meters', '/inventory', '/staff', '/suppliers', '/archive'],
   },
   { href: '/portfolio', label: 'Firma Portföyü', icon: '🏢', portfolioOnly: true },
-  { href: '/settings', label: 'Ayarlar', icon: '⚙️', match: ['/settings', '/blocks', '/excel'] },
+  { href: '/settings', label: 'Ayarlar', icon: '⚙️', match: ['/settings', '/blocks', '/excel', '/consent'] },
 ];

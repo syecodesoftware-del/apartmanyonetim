@@ -71,10 +71,20 @@ function computePreview(units: UnitOption[], amt: number, dist: 'arsa_payi' | 'e
   return rows;
 }
 
-export function AccrualsForm({ chargeTypes, units, siteId, batches = [], activePlans = [] }: {
+export type NotifyChannels = { push: boolean; sms: boolean; email: boolean; whatsapp: boolean };
+const CHANNEL_META: { key: keyof NotifyChannels; label: string; icon: string; hint?: string }[] = [
+  { key: 'push', label: 'Uygulama Bildirimi', icon: '🔔' },
+  { key: 'sms', label: 'SMS', icon: '💬', hint: 'sağlayıcı bekliyor' },
+  { key: 'email', label: 'E-posta', icon: '✉️', hint: 'sağlayıcı bekliyor' },
+  { key: 'whatsapp', label: 'WhatsApp', icon: '🟢', hint: 'sağlayıcı bekliyor' },
+];
+
+export function AccrualsForm({ chargeTypes, units, siteId, batches = [], activePlans = [], notifyDefaults }: {
   chargeTypes: ChargeOption[]; units: UnitOption[]; siteId: string; batches?: BatchRow[];
   /** Rapor #30: aktif aidat planı varken aynı ay için elle aidat üretme (çift borç) uyarısı. */
   activePlans?: { name: string; amount: number }[];
+  /** Rapor Madde 8: site varsayılan bildirim kanalları (notification_defaults). */
+  notifyDefaults?: NotifyChannels;
 }) {
   const router = useRouter();
   const ro = useReadOnly();
@@ -96,6 +106,10 @@ export function AccrualsForm({ chargeTypes, units, siteId, batches = [], activeP
   const [error, setError] = useState('');
   const [result, setResult] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Rapor Madde 8: borç oluşturulurken kullanılacak bildirim kanalları
+  const [channels, setChannels] = useState<NotifyChannels>(
+    notifyDefaults ?? { push: true, sms: false, email: false, whatsapp: false },
+  );
 
   // Önizleme (toplu tahakkuk yalnız buradan onaylanarak oluşturulur)
   const [preview, setPreview] = useState<null | { rows: { unit: UnitOption; tutar: number }[]; dist: 'arsa_payi' | 'esit' | 'sabit'; amt: number }>(null);
@@ -159,6 +173,24 @@ export function AccrualsForm({ chargeTypes, units, siteId, batches = [], activeP
     setPreview({ rows: computePreview(units, amt, dist), dist, amt });
   }
 
+  const selectedChannels = () =>
+    (Object.keys(channels) as (keyof NotifyChannels)[]).filter((k) => channels[k]);
+
+  /** Borç oluşturduktan sonra seçili kanallara bildirim gönderir; hata olsa da tahakkuk bozulmaz. */
+  async function notifyBatch(batchId: string): Promise<string> {
+    const chans = selectedChannels();
+    if (chans.length === 0) return '';
+    const { data, error } = await supabaseBrowser().rpc('notify_accrual_batch', {
+      p_batch_id: batchId, p_channels: chans,
+    });
+    if (error) return ' (Bildirim gönderilemedi: ' + error.message + ')';
+    const r = (data ?? {}) as { in_app?: number; queued?: number; skipped?: number };
+    const parts: string[] = [];
+    if (r.in_app) parts.push(`${r.in_app} uygulama bildirimi`);
+    if (r.queued) parts.push(`${r.queued} mesaj kuyruğa alındı`);
+    return parts.length ? ` Bildirim: ${parts.join(', ')}.` : '';
+  }
+
   async function confirmGenerate() {
     if (!preview) return;
     setBusy(true); setError('');
@@ -169,10 +201,11 @@ export function AccrualsForm({ chargeTypes, units, siteId, batches = [], activeP
       p_due_date: dueDate, p_amount: preview.amt, p_distribution: preview.dist,
       p_debtor_type: debtorType, p_batch_id: batchId,
     });
+    if (error) { setBusy(false); setPreview(null); setError(friendlyDbMessage(error.message)); return; }
+    const notifyMsg = (data ?? 0) > 0 ? await notifyBatch(batchId) : '';
     setBusy(false);
-    if (error) { setPreview(null); setError(friendlyDbMessage(error.message)); return; }
     setPreview(null);
-    setResult(`${data ?? 0} daireye borç tahakkuk ettirildi (borçlu: ${debtorType === 'kiraci' ? 'kiracı' : 'mülk sahibi'}). Yanlışlık varsa aşağıdaki parti listesinden geri alabilirsiniz.`);
+    setResult(`${data ?? 0} daireye borç tahakkuk ettirildi (borçlu: ${debtorType === 'kiraci' ? 'kiracı' : 'mülk sahibi'}).${notifyMsg} Yanlışlık varsa aşağıdaki parti listesinden geri alabilirsiniz.`);
     router.refresh();
   }
 
@@ -194,15 +227,17 @@ export function AccrualsForm({ chargeTypes, units, siteId, batches = [], activeP
     const amt = validateCommon();
     if (amt == null) return;
     setBusy(true);
+    const batchId = crypto.randomUUID();
     const { error } = await supabaseBrowser().rpc('create_unit_accrual', {
       p_unit_id: unitId, p_charge_type_id: chargeTypeId!,
       p_amount: amt, p_due_date: dueDate, p_debtor_type: debtorType,
-      p_description: description.trim() || undefined,
+      p_description: description.trim() || undefined, p_batch_id: batchId,
     });
+    if (error) { setBusy(false); setError(friendlyDbMessage(error.message)); return; }
+    const notifyMsg = await notifyBatch(batchId);
     setBusy(false);
-    if (error) { setError(friendlyDbMessage(error.message)); return; }
     const u = units.find((x) => x.id === unitId);
-    setResult(`${u ? unitLabel(u) : 'Daire'} için ${debtorType === 'kiraci' ? 'kiracıya' : 'mülk sahibine'} borç oluşturuldu.`);
+    setResult(`${u ? unitLabel(u) : 'Daire'} için ${debtorType === 'kiraci' ? 'kiracıya' : 'mülk sahibine'} borç oluşturuldu.${notifyMsg}`);
     setAmount(''); setDescription('');
   }
 
@@ -307,6 +342,22 @@ export function AccrualsForm({ chargeTypes, units, siteId, batches = [], activeP
           {mode === 'tekil' && (
             <Field label="Açıklama (opsiyonel)"><input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="örn. Cam kırılması onarımı" className={inputCls} /></Field>
           )}
+
+          <div className="rounded-lg border border-slate-200 p-3">
+            <p className="mb-1 text-xs font-medium text-slate-600">Bildirim Kanalları</p>
+            <p className="mb-2 text-xs text-slate-400">Borç oluşturulunca borçluya seçili kanallardan bildirilir. Uygulama bildirimi anında gider; SMS/e-posta/WhatsApp sağlayıcı bağlanınca gönderilmek üzere kuyruğa alınır.</p>
+            <div className="grid grid-cols-2 gap-2">
+              {CHANNEL_META.map((c) => (
+                <label key={c.key} className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 px-3 py-2">
+                  <span className="text-sm text-slate-700">
+                    {c.icon} {c.label}
+                    {c.hint && <span className="ml-1 text-[10px] text-slate-400">({c.hint})</span>}
+                  </span>
+                  <Toggle checked={channels[c.key]} onChange={(v) => setChannels((s) => ({ ...s, [c.key]: v }))} />
+                </label>
+              ))}
+            </div>
+          </div>
 
           {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>}
           {result && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">✓ {result}</p>}

@@ -39,6 +39,7 @@ export default async function UnitDetailPage({ params }: { params: Promise<{ uni
         ledger={data.ledger}
         residents={data.residents}
         accounts={data.accounts}
+        vehicles={data.vehicles}
         siteName={manager.siteName}
       />
     </>

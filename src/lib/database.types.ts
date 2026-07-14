@@ -1725,6 +1725,68 @@ export type Database = {
           },
         ]
       }
+      consent_forms: {
+        Row: {
+          generated_at: string
+          generated_by: string | null
+          id: string
+          kind: string
+          signed_file_path: string | null
+          site_id: string
+          status: string
+          tenancy_id: string | null
+        }
+        Insert: {
+          generated_at?: string
+          generated_by?: string | null
+          id?: string
+          kind?: string
+          signed_file_path?: string | null
+          site_id: string
+          status?: string
+          tenancy_id?: string | null
+        }
+        Update: {
+          generated_at?: string
+          generated_by?: string | null
+          id?: string
+          kind?: string
+          signed_file_path?: string | null
+          site_id?: string
+          status?: string
+          tenancy_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "consent_forms_generated_by_fkey"
+            columns: ["generated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "consent_forms_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "consent_forms_tenancy_id_fkey"
+            columns: ["tenancy_id"]
+            isOneToOne: false
+            referencedRelation: "current_occupants"
+            referencedColumns: ["tenancy_id"]
+          },
+          {
+            foreignKeyName: "consent_forms_tenancy_id_fkey"
+            columns: ["tenancy_id"]
+            isOneToOne: false
+            referencedRelation: "tenancies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       direct_messages: {
         Row: {
           body: string
@@ -2045,6 +2107,93 @@ export type Database = {
             foreignKeyName: "enforcement_events_site_id_fkey"
             columns: ["site_id"]
             isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      import_batches: {
+        Row: {
+          counts: Json
+          created_at: string
+          created_by: string | null
+          filename: string | null
+          id: string
+          site_id: string
+        }
+        Insert: {
+          counts?: Json
+          created_at?: string
+          created_by?: string | null
+          filename?: string | null
+          id?: string
+          site_id: string
+        }
+        Update: {
+          counts?: Json
+          created_at?: string
+          created_by?: string | null
+          filename?: string | null
+          id?: string
+          site_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "import_batches_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "import_batches_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      import_drafts: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          filename: string | null
+          id: string
+          payload: Json
+          site_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          filename?: string | null
+          id?: string
+          payload: Json
+          site_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          filename?: string | null
+          id?: string
+          payload?: Json
+          site_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "import_drafts_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "import_drafts_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: true
             referencedRelation: "sites"
             referencedColumns: ["id"]
           },
@@ -2412,6 +2561,32 @@ export type Database = {
             columns: ["unit_id"]
             isOneToOne: false
             referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notification_defaults: {
+        Row: {
+          channels: Json
+          site_id: string
+          updated_at: string
+        }
+        Insert: {
+          channels?: Json
+          site_id: string
+          updated_at?: string
+        }
+        Update: {
+          channels?: Json
+          site_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_defaults_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: true
+            referencedRelation: "sites"
             referencedColumns: ["id"]
           },
         ]
@@ -3423,6 +3598,8 @@ export type Database = {
           end_date: string | null
           full_name: string
           id: string
+          language: string
+          notes: string | null
           phone: string | null
           relationship: string
           site_id: string
@@ -3437,6 +3614,8 @@ export type Database = {
           end_date?: string | null
           full_name: string
           id?: string
+          language?: string
+          notes?: string | null
           phone?: string | null
           relationship: string
           site_id: string
@@ -3451,6 +3630,8 @@ export type Database = {
           end_date?: string | null
           full_name?: string
           id?: string
+          language?: string
+          notes?: string | null
           phone?: string | null
           relationship?: string
           site_id?: string
@@ -4246,7 +4427,10 @@ export type Database = {
           has_account: boolean | null
           kalan_anapara: number | null
           kalan_gecikme: number | null
+          language: string | null
+          notes: string | null
           phone: string | null
+          plates: string | null
           relationship: string | null
           site_id: string | null
           start_date: string | null
@@ -4424,7 +4608,7 @@ export type Database = {
       auth_user_site_id: { Args: never; Returns: string }
       auth_user_unit_id: { Args: never; Returns: string }
       bulk_import_units_residents: {
-        Args: { p_rows: Json; p_update_existing?: boolean }
+        Args: { p_filename?: string; p_rows: Json; p_update_existing?: boolean }
         Returns: Json
       }
       calculate_late_fees: {
@@ -4516,6 +4700,7 @@ export type Database = {
       create_unit_accrual: {
         Args: {
           p_amount: number
+          p_batch_id?: string
           p_charge_type_id: string
           p_debtor_type: string
           p_description?: string
@@ -4839,6 +5024,10 @@ export type Database = {
       mark_package_delivered: {
         Args: { p_id: string | null; p_note?: string }
         Returns: undefined
+      }
+      notify_accrual_batch: {
+        Args: { p_batch_id: string; p_channels: string[] }
+        Returns: Json
       }
       open_enforcement: {
         Args: {

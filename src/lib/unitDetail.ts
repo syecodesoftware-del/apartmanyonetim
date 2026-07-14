@@ -11,10 +11,10 @@ export async function getUnitDetailData(unitId: string) {
     .maybeSingle();
   if (!unit) return null;
 
-  const [{ data: tenancies }, { data: balance }, { data: residents }, { data: ledger }, { data: accounts }] = await Promise.all([
+  const [{ data: tenancies }, { data: balance }, { data: residents }, { data: ledger }, { data: accounts }, { data: vehicles }] = await Promise.all([
     sb
       .from('tenancies')
-      .select('id, user_id, relationship, full_name, phone, tc_kimlik, start_date, end_date')
+      .select('id, user_id, relationship, full_name, phone, tc_kimlik, language, notes, start_date, end_date')
       .eq('unit_id', unitId)
       .order('end_date', { ascending: true, nullsFirst: true })
       .order('start_date', { ascending: false }),
@@ -40,6 +40,12 @@ export async function getUnitDetailData(unitId: string) {
       .eq('site_id', unit.site_id)
       .eq('is_active', true)
       .order('created_at', { ascending: true }),
+    sb
+      .from('unit_vehicles')
+      .select('id, plate, label, active')
+      .eq('unit_id', unitId)
+      .eq('active', true)
+      .order('created_at', { ascending: true }),
   ]);
 
   return {
@@ -52,5 +58,6 @@ export async function getUnitDetailData(unitId: string) {
     residents: residents ?? [],
     ledger: ledger ?? [],
     accounts: accounts ?? [],
+    vehicles: vehicles ?? [],
   };
 }

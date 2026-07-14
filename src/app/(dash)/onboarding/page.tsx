@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { requireManager } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
 import { BulkImportWizard } from '@/components/BulkImportWizard';
+import { loadImportSnapshot } from '@/lib/importSnapshot';
 import { skipOnboarding } from '@/app/actions/onboarding';
 
 export const dynamic = 'force-dynamic';
@@ -14,11 +15,8 @@ export default async function OnboardingPage() {
   if (manager.readOnly) redirect('/');
 
   const sb = await supabaseServer();
-  const { data: units } = await sb
-    .from('units')
-    .select('block, apartment_number')
-    .eq('site_id', manager.siteId);
-  const unitCount = units?.length ?? 0;
+  const snapshot = await loadImportSnapshot(sb, manager.siteId);
+  const unitCount = snapshot.length;
 
   return (
     <div className="mx-auto max-w-4xl">
@@ -38,7 +36,7 @@ export default async function OnboardingPage() {
         </ol>
       </div>
 
-      <BulkImportWizard existing={units ?? []} />
+      <BulkImportWizard snapshot={snapshot} siteId={manager.siteId} variant="inline" />
 
       <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-4 text-sm">
         <Link href="/units" className="font-medium text-blue-600 hover:underline">

@@ -8,6 +8,7 @@ export const IMPORT_HEADERS = [
   'Blok', 'Daire No', 'Kat', 'Arsa Payı', 'm²',
   'Mülk Sahibi Ad Soyad', 'Malik TC', 'Malik Telefon',
   'Kiracı Ad Soyad', 'Kiracı TC', 'Kiracı Telefon',
+  'Plaka', 'İletişim Dili', 'Açıklama',
 ] as const;
 
 /** Editörde tutulan ham satır — tüm alanlar string, dönüşüm gönderimde yapılır. */
@@ -24,6 +25,9 @@ export type ImportRow = {
   kiraci_name: string;
   kiraci_tc: string;
   kiraci_phone: string;
+  plate: string;
+  language: string;
+  notes: string;
 };
 
 export type ImportField = Exclude<keyof ImportRow, 'key'>;
@@ -31,9 +35,41 @@ export type ImportField = Exclude<keyof ImportRow, 'key'>;
 export type ValidatedRow = ImportRow & {
   errors: string[];
   errorFields: ImportField[];
+  /** Eksik ama zorunlu olmayan alanlar — bloklamaz, sarı uyarı gösterilir (Rapor Madde 7). */
+  warnings: string[];
+  warnFields: ImportField[];
   /** Aynı Blok+Daire No sitede zaten kayıtlı → içe aktarmada atlanır (hata değil). */
   exists: boolean;
 };
+
+/** Desteklenen iletişim dilleri (tenancies.language check ile birebir). */
+export const LANGUAGES = [
+  { code: 'tr', label: 'Türkçe' },
+  { code: 'en', label: 'English' },
+  { code: 'ar', label: 'العربية' },
+  { code: 'ru', label: 'Русский' },
+  { code: 'de', label: 'Deutsch' },
+] as const;
+
+export type LangCode = (typeof LANGUAGES)[number]['code'];
+
+/** Serbest yazılmış dil hücresini ('Türkçe', 'english', 'ar', 'العربية'…) koda çevirir; tanınmazsa null. */
+export function normalizeLanguage(raw: string): LangCode | null {
+  const s = (raw ?? '').trim().toLocaleLowerCase('tr-TR');
+  if (!s) return null;
+  if (/^(tr|tur|türk|turk)/.test(s) || s.includes('türkçe') || s.includes('turkce')) return 'tr';
+  if (/^(en|ing)/.test(s) || s.includes('english') || s.includes('ingiliz')) return 'en';
+  if (/^ar/.test(s) || s.includes('arap') || s.includes('عرب')) return 'ar';
+  if (/^ru/.test(s) || s.includes('rus') || s.includes('русск')) return 'ru';
+  if (/^(de|al)/.test(s) || s.includes('deutsch') || s.includes('alman') || s.includes('german')) return 'de';
+  return null;
+}
+
+/** Plaka normalizasyonu: boşluksuz, büyük harf. Boşsa null. */
+export function normalizePlate(raw: string): string | null {
+  const s = (raw ?? '').replace(/\s+/g, '').toLocaleUpperCase('tr-TR');
+  return s || null;
+}
 
 /** Türk TC Kimlik No resmi algoritma doğrulaması (DB is_valid_tc birebir). */
 export function isValidTc(tc: string): boolean {
@@ -62,17 +98,22 @@ export const unitKey = (block: string, apt: string) =>
 export const emptyImportRow = (key: number): ImportRow => ({
   key, block: '', apartment_number: '', floor: '', arsa_payi: '', m2: '',
   malik_name: '', malik_tc: '', malik_phone: '', kiraci_name: '', kiraci_tc: '', kiraci_phone: '',
+  plate: '', language: '', notes: '',
 });
 
 const numOk = (v: string) => Number.isFinite(Number(v.replace(',', '.')));
 
-/** Tüm satırları doğrular; editörde her değişiklikte yeniden koşar (dosya-içi tekrar dahil). */
+/** Tüm satırları doğrular; editörde her değişiklikte yeniden koşar (dosya-içi tekrar dahil).
+ *  Hatalar (kırmızı) içe aktarımı bloklar; uyarılar (sarı) bloklamaz — eksik opsiyonel alanlar. */
 export function validateRows(rows: ImportRow[], existingKeys: Set<string>): ValidatedRow[] {
   const seen = new Map<string, number>(); // unitKey -> ilk görüldüğü satır index'i
   return rows.map((r, i) => {
     const errors: string[] = [];
     const errorFields: ImportField[] = [];
     const err = (f: ImportField, m: string) => { errors.push(m); errorFields.push(f); };
+    const warnings: string[] = [];
+    const warnFields: ImportField[] = [];
+    const warn = (f: ImportField, m: string) => { warnings.push(m); warnFields.push(f); };
 
     const apt = r.apartment_number.trim();
     if (!apt) err('apartment_number', 'Daire No boş');
@@ -91,6 +132,17 @@ export function validateRows(rows: ImportRow[], existingKeys: Set<string>): Vali
     if (r.arsa_payi.trim() && !numOk(r.arsa_payi.trim())) err('arsa_payi', 'Arsa Payı sayısal değil');
     if (r.m2.trim() && !numOk(r.m2.trim())) err('m2', 'm² sayısal değil');
 
+    // ── Uyarılar (bloklamaz): eksik iletişim bilgisi + tanınmayan dil ──
+    if (r.malik_name.trim()) {
+      if (!r.malik_tc.trim()) warn('malik_tc', 'Malik TC eksik');
+      if (!r.malik_phone.trim()) warn('malik_phone', 'Malik telefon eksik');
+    }
+    if (r.kiraci_name.trim()) {
+      if (!r.kiraci_tc.trim()) warn('kiraci_tc', 'Kiracı TC eksik');
+      if (!r.kiraci_phone.trim()) warn('kiraci_phone', 'Kiracı telefon eksik');
+    }
+    if (r.language.trim() && !normalizeLanguage(r.language)) warn('language', 'Dil tanınmadı — Türkçe varsayılacak');
+
     let exists = false;
     if (apt) {
       const key = unitKey(r.block, apt);
@@ -100,7 +152,7 @@ export function validateRows(rows: ImportRow[], existingKeys: Set<string>): Vali
       exists = existingKeys.has(key);
     }
 
-    return { ...r, errors, errorFields, exists };
+    return { ...r, errors, errorFields, warnings, warnFields, exists };
   });
 }
 
@@ -118,6 +170,9 @@ const HEADER_ALIASES: Record<string, ImportField> = {
   'kiraciadsoyad': 'kiraci_name', 'kiraci': 'kiraci_name',
   'kiracitc': 'kiraci_tc', 'kiracitckimlik': 'kiraci_tc',
   'kiracitelefon': 'kiraci_phone', 'kiracitel': 'kiraci_phone',
+  'plaka': 'plate', 'plakano': 'plate', 'aracplaka': 'plate', 'aracplakasi': 'plate', 'plate': 'plate',
+  'iletisimdili': 'language', 'dil': 'language', 'tercihdil': 'language', 'tercihedilendil': 'language', 'language': 'language',
+  'aciklama': 'notes', 'not': 'notes', 'notlar': 'notes', 'aciklamalar': 'notes', 'notes': 'notes',
 };
 
 const normHeader = (h: string) =>
@@ -127,8 +182,25 @@ const normHeader = (h: string) =>
     .replace(/[²]/g, '2')
     .replace(/[^a-z0-9]/g, '');
 
-/** Yüklenen Excel'in ilk sayfasını editör satırlarına çevirir (doğrulama editörde yapılır). */
-export function parseImportWorkbook(data: ArrayBuffer): ImportRow[] {
+/** Algılanan sütun eşlemesi — sütun eşleştirme şeffaflığı (extra madde). */
+export type ImportParseMeta = {
+  rows: ImportRow[];
+  /** Tanınan başlıklar: hangi Excel başlığı → hangi alan. */
+  mapping: { field: ImportField; header: string }[];
+  /** Hiçbir alana eşlenemeyen başlıklar (dolu olanlar). */
+  unmatched: string[];
+};
+
+const FIELD_LABEL: Record<ImportField, string> = {
+  block: 'Blok', apartment_number: 'Daire No', floor: 'Kat', arsa_payi: 'Arsa Payı', m2: 'm²',
+  malik_name: 'Mülk Sahibi', malik_tc: 'Malik TC', malik_phone: 'Malik Telefon',
+  kiraci_name: 'Kiracı', kiraci_tc: 'Kiracı TC', kiraci_phone: 'Kiracı Telefon',
+  plate: 'Plaka', language: 'İletişim Dili', notes: 'Açıklama',
+};
+export const importFieldLabel = (f: ImportField) => FIELD_LABEL[f];
+
+/** Yüklenen Excel'in ilk sayfasını editör satırları + algılanan sütun eşlemesine çevirir. */
+export function parseImportWorkbookWithMeta(data: ArrayBuffer): ImportParseMeta {
   const wb = XLSX.read(data, { type: 'array' });
   const sheet = wb.Sheets[wb.SheetNames[0]];
   if (!sheet) throw new Error('Dosyada okunacak sayfa yok');
@@ -136,9 +208,14 @@ export function parseImportWorkbook(data: ArrayBuffer): ImportRow[] {
   if (aoa.length < 2) throw new Error('Dosyada başlık satırından başka veri yok');
 
   const col: Partial<Record<ImportField, number>> = {};
+  const mapping: { field: ImportField; header: string }[] = [];
+  const unmatched: string[] = [];
   (aoa[0] as unknown[]).forEach((h, i) => {
-    const f = HEADER_ALIASES[normHeader(String(h ?? ''))];
-    if (f && col[f] === undefined) col[f] = i;
+    const header = String(h ?? '').trim();
+    if (!header) return;
+    const f = HEADER_ALIASES[normHeader(header)];
+    if (f && col[f] === undefined) { col[f] = i; mapping.push({ field: f, header }); }
+    else if (!f) unmatched.push(header);
   });
   if (col.apartment_number === undefined) {
     throw new Error('"Daire No" sütunu bulunamadı. Lütfen örnek şablondaki başlıkları kullanın.');
@@ -146,7 +223,7 @@ export function parseImportWorkbook(data: ArrayBuffer): ImportRow[] {
 
   const get = (r: unknown[], f: ImportField) => (col[f] === undefined ? '' : String(r[col[f]!] ?? '').trim());
 
-  return aoa.slice(1)
+  const rows = aoa.slice(1)
     .map((r, i): ImportRow => ({
       key: i + 1,
       block: get(r, 'block'),
@@ -160,8 +237,18 @@ export function parseImportWorkbook(data: ArrayBuffer): ImportRow[] {
       kiraci_name: get(r, 'kiraci_name'),
       kiraci_tc: get(r, 'kiraci_tc'),
       kiraci_phone: get(r, 'kiraci_phone'),
+      plate: get(r, 'plate'),
+      language: get(r, 'language'),
+      notes: get(r, 'notes'),
     }))
     .filter((r) => r.block || r.apartment_number || r.malik_name || r.kiraci_name || r.malik_tc || r.kiraci_tc);
+
+  return { rows, mapping, unmatched };
+}
+
+/** Geriye dönük: yalnız satırları döndürür. */
+export function parseImportWorkbook(data: ArrayBuffer): ImportRow[] {
+  return parseImportWorkbookWithMeta(data).rows;
 }
 
 /** RPC'ye giden daire satırı (bulk_import_units_residents v2 sözleşmesi). */
@@ -173,12 +260,21 @@ export type RpcUnitRow = {
   m2: number | null;
   malik: { full_name: string; tc_kimlik: string | null; phone: string | null };
   kiraci: { full_name: string; tc_kimlik: string | null; phone: string | null } | null;
+  plate: string | null;
+  language: LangCode | null;
+  notes: string | null;
 };
 
-/** Hatası olmayan ve DB'de zaten var olmayan satırları RPC yüküne çevirir. */
-export function toRpcRows(rows: ValidatedRow[]): RpcUnitRow[] {
+/** Hangi satırlar içe aktarılacak? Hatasız + (yeni VEYA güncelleme modunda mevcut). */
+export function isImportable(r: ValidatedRow, updateExisting: boolean): boolean {
+  return r.errors.length === 0 && (!r.exists || updateExisting);
+}
+
+/** Hatası olmayan, uygulanacak satırları RPC yüküne çevirir.
+ *  updateExisting=false → mevcut daireler atlanır; true → hepsi gönderilir (RPC güncelleme yapar). */
+export function toRpcRows(rows: ValidatedRow[], updateExisting = false): RpcUnitRow[] {
   return rows
-    .filter((r) => r.errors.length === 0 && !r.exists)
+    .filter((r) => isImportable(r, updateExisting))
     .map((r) => ({
       block: r.block.trim() || null,
       apartment_number: r.apartment_number.trim(),
@@ -197,7 +293,132 @@ export function toRpcRows(rows: ValidatedRow[]): RpcUnitRow[] {
             phone: normalizePhoneTR(r.kiraci_phone),
           }
         : null,
+      plate: normalizePlate(r.plate),
+      language: normalizeLanguage(r.language),
+      notes: r.notes.trim() || null,
     }));
+}
+
+/* ── Diff / senkronizasyon (Rapor Madde 1) ─────────────────────────────────
+ *  Yeni Excel ile sistemdeki mevcut veri karşılaştırılır; her satır sınıflandırılır.
+ *  KARAR: "dosyada yok" yalnız gösterilir — hiçbir kayıt SİLİNMEZ. */
+
+export type PersonSnap = { full_name: string; phone: string | null; tc_kimlik: string | null };
+export type SnapUnit = {
+  block: string | null;
+  apartment_number: string;
+  floor: number | null;
+  arsa_payi: number | null;
+  m2: number | null;
+  language: string | null;
+  notes: string | null;
+  plates: string | null; // virgülle ayrılmış aktif plakalar
+  malik: PersonSnap | null;
+  kiraci: PersonSnap | null;
+};
+/** unitKey → mevcut daire durumu. Sayfa `units` + `current_occupants`'tan kurar. */
+export type CurrentSnapshot = Map<string, SnapUnit>;
+
+export type RowClass = 'yeni' | 'guncel' | 'degismeyen' | 'dosyada_yok';
+
+export type ClassifiedRow = ValidatedRow & { cls: RowClass; changes: string[] };
+
+/** Sistemde olup dosyada olmayan daire (yalnız bilgi — silinmez). */
+export type MissingUnit = { block: string | null; apartment_number: string; label: string; occupants: string };
+
+const normName = (s: string) => (s ?? '').trim().toLocaleLowerCase('tr-TR');
+
+/** Doğrulanmış satırları mevcut duruma göre sınıflandırır + dosyada olmayan daireleri bulur. */
+export function classifyRows(
+  rows: ValidatedRow[],
+  snap: CurrentSnapshot,
+): { rows: ClassifiedRow[]; missing: MissingUnit[] } {
+  const fileKeys = new Set<string>();
+
+  const classified = rows.map((r): ClassifiedRow => {
+    const apt = r.apartment_number.trim();
+    const key = apt ? unitKey(r.block, apt) : '';
+    if (key) fileKeys.add(key);
+
+    const cur = key ? snap.get(key) : undefined;
+    if (!cur) return { ...r, cls: 'yeni', changes: [] };
+
+    const changes: string[] = [];
+    // Daire metası — RPC yalnız BOŞ alanı doldurur
+    if (r.floor.trim() && cur.floor === null) changes.push('Kat eklenecek');
+    if (r.arsa_payi.trim() && cur.arsa_payi === null) changes.push('Arsa payı eklenecek');
+    if (r.m2.trim() && cur.m2 === null) changes.push('m² eklenecek');
+
+    // Malik — RPC ismi değiştirmez, yalnız boş tel/TC tamamlar
+    const mPhone = normalizePhoneTR(r.malik_phone);
+    if (cur.malik) {
+      if (mPhone && !cur.malik.phone) changes.push('Malik telefonu tamamlanacak');
+      if (r.malik_tc.trim() && !cur.malik.tc_kimlik) changes.push('Malik TC tamamlanacak');
+    } else if (r.malik_name.trim()) {
+      changes.push('Malik eklenecek');
+    }
+
+    // Kiracı — isim aynıysa tamamla; farklıysa devir; yoksa ekle
+    if (r.kiraci_name.trim()) {
+      const kPhone = normalizePhoneTR(r.kiraci_phone);
+      if (!cur.kiraci) {
+        changes.push('Kiracı eklenecek');
+      } else if (normName(cur.kiraci.full_name) === normName(r.kiraci_name)) {
+        if (kPhone && !cur.kiraci.phone) changes.push('Kiracı telefonu tamamlanacak');
+        if (r.kiraci_tc.trim() && !cur.kiraci.tc_kimlik) changes.push('Kiracı TC tamamlanacak');
+      } else {
+        changes.push('Kiracı değişiyor (devir)');
+      }
+    }
+
+    // Dil / açıklama — Excel doluysa ve farklıysa
+    const lang = normalizeLanguage(r.language);
+    if (lang && lang !== (cur.language ?? 'tr')) changes.push('İletişim dili güncellenecek');
+    if (r.notes.trim() && r.notes.trim() !== (cur.notes ?? '')) changes.push('Açıklama güncellenecek');
+
+    // Plaka — Excel doluysa ve mevcut aktif plakalarda yoksa
+    const plate = normalizePlate(r.plate);
+    if (plate) {
+      const have = (cur.plates ?? '').split(',').map((p) => normalizePlate(p) ?? '').filter(Boolean);
+      if (!have.includes(plate)) changes.push('Plaka eklenecek');
+    }
+
+    return { ...r, cls: changes.length ? 'guncel' : 'degismeyen', changes };
+  });
+
+  const missing: MissingUnit[] = [];
+  for (const [key, u] of snap) {
+    if (fileKeys.has(key)) continue;
+    const occ = [u.malik?.full_name, u.kiraci?.full_name].filter(Boolean).join(', ');
+    missing.push({
+      block: u.block,
+      apartment_number: u.apartment_number,
+      label: [u.block, u.apartment_number].filter(Boolean).join(' '),
+      occupants: occ,
+    });
+  }
+  missing.sort((a, b) => a.label.localeCompare(b.label, 'tr'));
+  return { rows: classified, missing };
+}
+
+/** Hatalı satırları "Hata Nedeni" sütunlu bir Excel'e döker (indirilebilir hata raporu). */
+export function buildErrorReportBlob(rows: ValidatedRow[]): Blob {
+  const bad = rows.filter((r) => r.errors.length > 0);
+  const out = bad.map((r) => ({
+    Blok: r.block,
+    'Daire No': r.apartment_number,
+    'Mülk Sahibi': r.malik_name,
+    'Malik TC': r.malik_tc,
+    'Malik Telefon': r.malik_phone,
+    'Kiracı': r.kiraci_name,
+    'Kiracı TC': r.kiraci_tc,
+    'Kiracı Telefon': r.kiraci_phone,
+    Plaka: r.plate,
+    'İletişim Dili': r.language,
+    'Açıklama': r.notes,
+    'Hata Nedeni': r.errors.join(' • '),
+  }));
+  return buildExportBlob([{ name: 'Hatalı Satırlar', rows: out }]);
 }
 
 /** Şablon (.xlsx): "Daireler" sayfası (başlık + 3 örnek satır) + "Nasıl Doldurulur" açıklama sayfası. */
@@ -206,9 +427,9 @@ export function buildTemplateBlob(): Blob {
 
   const dataRows = [
     [...IMPORT_HEADERS],
-    ['A', '1', '1', '10', '120', 'Ali Yılmaz', '10000000146', '5551112233', 'Ayşe Demir', '', '5552223344'],
-    ['A', '2', '1', '10', '120', 'Mehmet Kaya', '', '5553334455', '', '', ''],
-    ['B', '1', '2', '12', '145', 'Fatma Çelik', '', '', 'Can Aydın', '', '5554445566'],
+    ['A', '1', '1', '10', '120', 'Ali Yılmaz', '10000000146', '5551112233', 'Ayşe Demir', '', '5552223344', '34 ABC 123', 'Türkçe', 'Aidatı banka ile ödüyor'],
+    ['A', '2', '1', '10', '120', 'Mehmet Kaya', '', '5553334455', '', '', '', '', 'Türkçe', ''],
+    ['B', '1', '2', '12', '145', 'Fatma Çelik', '', '', 'Can Aydın', '', '5554445566', '', 'English', 'Sadece WhatsApp kullanıyor'],
   ];
   const ws = XLSX.utils.aoa_to_sheet(dataRows);
   ws['!cols'] = IMPORT_HEADERS.map((h) => ({ wch: Math.max(12, h.length + 4) }));
@@ -231,6 +452,9 @@ export function buildTemplateBlob(): Blob {
     ['Kiracı Ad Soyad', 'Hayır', 'Dairede kiracı oturuyorsa yazın; malik oturuyorsa boş bırakın.'],
     ['Kiracı TC', 'Hayır', 'Doldurursanız geçerli olmalıdır.'],
     ['Kiracı Telefon', 'Hayır', 'Kiracının cep telefonu.'],
+    ['Plaka', 'Hayır', 'Dairenin aracı varsa plakası (34 ABC 123). Bariyer/otopark modülü bunu kullanır.'],
+    ['İletişim Dili', 'Hayır', 'Sakinin tercih ettiği dil: Türkçe, English, العربية, Русский veya Deutsch. SMS/e-posta/bildirim bu dilde gönderilir. Boşsa Türkçe.'],
+    ['Açıklama', 'Hayır', 'Serbest not (örn. "Yaşlı", "Sadece WhatsApp", "Yurt dışında"). İleride bu alana göre filtreleyebilirsiniz.'],
     [''],
     ['Yükledikten sonra tüm satırları ekranda görecek, düzeltme/ekleme/silme yapabileceksiniz.'],
     ['Hiçbir kayıt siz "İçe Aktar" butonuna basmadan oluşturulmaz.'],

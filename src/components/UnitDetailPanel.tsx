@@ -19,10 +19,29 @@ export type Tenancy = {
   full_name: string;
   phone: string | null;
   tc_kimlik: string | null;
+  language?: string | null;
+  notes?: string | null;
   start_date: string;
   end_date: string | null;
 };
+export type Vehicle = { id: string; plate: string; label: string | null; active: boolean };
 export type ResidentOption = { id: string; full_name: string; phone: string | null; tc_kimlik: string | null };
+
+const LANG_LABEL: Record<string, string> = { tr: 'Türkçe', en: 'English', ar: 'العربية', ru: 'Русский', de: 'Deutsch' };
+const langLabel = (c: string | null | undefined) => (c ? LANG_LABEL[c] ?? c : null);
+
+/** Sakin altında iletişim dili + serbest açıklama rozetleri (Rapor Madde 4/5). */
+function PersonMeta({ t }: { t: Tenancy }) {
+  const lang = langLabel(t.language);
+  const hasLang = lang && t.language !== 'tr';
+  if (!hasLang && !t.notes) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+      {hasLang && <span className="rounded bg-indigo-50 px-1.5 py-0.5 text-[11px] font-medium text-indigo-700">🌐 {lang}</span>}
+      {t.notes && <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[11px] text-amber-700" title="Açıklama">📝 {t.notes}</span>}
+    </div>
+  );
+}
 export type LedgerRow = {
   id: string | null;
   tarih: string | null;
@@ -47,6 +66,7 @@ export function UnitDetailPanel({
   ledger,
   residents,
   accounts = [],
+  vehicles = [],
   siteName = '',
 }: {
   unitId: string;
@@ -59,6 +79,7 @@ export function UnitDetailPanel({
   ledger: LedgerRow[];
   residents: ResidentOption[];
   accounts?: AccountOption[];
+  vehicles?: Vehicle[];
   siteName?: string;
 }) {
   const router = useRouter();
@@ -281,6 +302,7 @@ ${rows}
               {currentOwner.phone ? <PhoneLink phone={currentOwner.phone} /> : <p className="text-xs text-slate-500">Telefon yok</p>}
               <p className="text-xs text-slate-400">Başlangıç: {date(currentOwner.start_date)}</p>
               {currentOwner.user_id && <Badge tone="green">Uygulama kullanıcısı</Badge>}
+              <PersonMeta t={currentOwner} />
             </div>
           ) : (
             <p className="text-sm text-red-600">⚠ Mülk sahibi atanmamış — daire sahipsiz olamaz.</p>
@@ -308,6 +330,7 @@ ${rows}
                 {currentTenant.phone ? <PhoneLink phone={currentTenant.phone} /> : <p className="text-xs text-slate-500">Telefon yok</p>}
                 <p className="text-xs text-slate-400">Başlangıç: {date(currentTenant.start_date)}</p>
                 {currentTenant.user_id && <Badge tone="green">Uygulama kullanıcısı</Badge>}
+                <PersonMeta t={currentTenant} />
               </div>
               {!ro && (
                 <div className="flex flex-wrap gap-2 pt-1">
@@ -338,6 +361,19 @@ ${rows}
           )}
         </Card>
       </div>
+
+      {/* Araçlar (plaka) — bariyer/otopark modülü için */}
+      {vehicles.length > 0 && (
+        <Card title="Araçlar">
+          <div className="flex flex-wrap gap-2">
+            {vehicles.map((v) => (
+              <span key={v.id} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-slate-50 px-2.5 py-1 font-mono text-sm font-semibold text-slate-700">
+                🚗 {v.plate}{v.label && <span className="font-sans text-xs font-normal text-slate-400">· {v.label}</span>}
+              </span>
+            ))}
+          </div>
+        </Card>
+      )}
 
       {/* GÜNCEL BORÇ DÖKÜMÜ */}
       <Card

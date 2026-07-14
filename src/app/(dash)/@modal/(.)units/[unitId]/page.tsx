@@ -30,6 +30,7 @@ export default async function UnitDetailModal({ params }: { params: Promise<{ un
         ledger={data.ledger}
         residents={data.residents}
         accounts={data.accounts}
+        vehicles={data.vehicles}
         siteName={manager.siteName}
       />
     </RouteModal>
