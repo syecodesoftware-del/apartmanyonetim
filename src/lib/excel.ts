@@ -336,6 +336,18 @@ export function buildInviteTemplateBlob(): Blob {
   return new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
 }
 
+/** Banka ekstresi vb. serbest tablolar için: ilk sayfayı ham hücre ızgarası olarak okur.
+ *  Tarih hücreleri yyyy-mm-dd olarak biçimlenir; boş satırlar atılır. */
+export function parseGenericWorkbook(data: ArrayBuffer): string[][] {
+  const wb = XLSX.read(data, { cellDates: false });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  if (!ws) return [];
+  const rows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, raw: false, dateNF: 'yyyy-mm-dd', defval: '' });
+  return rows
+    .map((r) => (r as unknown[]).map((c) => String(c ?? '').trim()))
+    .filter((r) => r.some((c) => c !== ''));
+}
+
 /** Çok-sheet'li dışa aktarma; her tablo bir sheet. */
 export function buildExportBlob(sheets: { name: string; rows: Record<string, unknown>[] }[]): Blob {
   const wb = XLSX.utils.book_new();

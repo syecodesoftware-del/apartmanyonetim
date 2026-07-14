@@ -11,16 +11,20 @@ function isActive(pathname: string, item: (typeof NAV_ITEMS)[number]): boolean {
   return prefixes.some((p) => pathname === p || pathname.startsWith(p + '/'));
 }
 
-export function Sidebar({ siteName, showPortfolio, badges = {} }: {
+export function Sidebar({ siteName, showPortfolio, badges = {}, gateOnly = false }: {
   siteName: string;
   showPortfolio: boolean;
   /** href → bekleyen iş sayısı (örn. onay bekleyen başvuru, açık şikayet) */
   badges?: Record<string, number>;
+  /** Kapı görevlisi: menüde yalnız Kapı & Ziyaretçi görünür. */
+  gateOnly?: boolean;
 }) {
   const pathname = usePathname();
   const { open, setOpen } = useNav();
 
-  const items = NAV_ITEMS.filter((it) => !it.portfolioOnly || showPortfolio);
+  const items = gateOnly
+    ? [{ href: '/gate', label: 'Kapı & Ziyaretçi', icon: '🚪' } as (typeof NAV_ITEMS)[number]]
+    : NAV_ITEMS.filter((it) => !it.portfolioOnly || showPortfolio);
 
   const content = (
     <>

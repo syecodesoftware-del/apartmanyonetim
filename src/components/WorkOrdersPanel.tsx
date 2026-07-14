@@ -1,12 +1,14 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabaseBrowser } from '@/lib/supabaseBrowser';
 import { Card, EmptyState, Badge } from '@/components/ui';
 import { Modal, Field, inputCls } from '@/components/UnitsPanel';
+import { PhoneLink } from '@/components/PhoneLink';
 import { useReadOnly } from '@/components/ReadOnly';
 import { money, date } from '@/lib/format';
+import { todayLocalISO } from '@/lib/date';
 import { friendlyDbMessage } from '@/lib/error';
 
 export type WorkOrder = {
@@ -31,6 +33,7 @@ export type WorkOrder = {
 
 export type SiteUser = { id: string; full_name: string | null; role: string };
 export type OpenComplaint = { id: string; title: string; status: string; created_at: string };
+export type AccountOption = { id: string; ad: string; tur: string };
 
 type Activity = { action: string; note: string | null; created_at: string; actor: string | null };
 type Detail = WorkOrder & { cost_note: string | null; activity: Activity[] };
@@ -49,7 +52,7 @@ const STATUS_LABEL: Record<string, string> = {
 const BOARD_COLUMNS: string[] = ['acik', 'atandi', 'devam', 'beklemede', 'tamamlandi'];
 const ACTION_LABEL: Record<string, string> = { olustur: 'Oluşturuldu', atama: 'Görevli atandı', durum: 'Durum', maliyet: 'Maliyet', not: 'Not' };
 
-export function WorkOrdersPanel({ siteId, orders: initial, users, complaints }: { siteId: string; orders: WorkOrder[]; users: SiteUser[]; complaints: OpenComplaint[] }) {
+export function WorkOrdersPanel({ siteId, orders: initial, users, complaints, accounts = [] }: { siteId: string; orders: WorkOrder[]; users: SiteUser[]; complaints: OpenComplaint[]; accounts?: AccountOption[] }) {
   const router = useRouter();
   const ro = useReadOnly();
   const [orders, setOrders] = useState<WorkOrder[]>(initial);
@@ -76,6 +79,7 @@ export function WorkOrdersPanel({ siteId, orders: initial, users, complaints }: 
   // cost fields
   const [costVal, setCostVal] = useState('');
   const [costNote, setCostNote] = useState('');
+  const [costAccount, setCostAccount] = useState(''); // '' = kasaya işleme
   // documents (modül derin-link)
   const [docs, setDocs] = useState<WoDoc[]>([]);
   const docRef = useRef<HTMLInputElement>(null);
@@ -105,6 +109,7 @@ export function WorkOrdersPanel({ siteId, orders: initial, users, complaints }: 
     setAPhone(d.assignee_phone ?? '');
     setCostVal(d.cost ? String(d.cost) : '');
     setCostNote(d.cost_note ?? '');
+    setCostAccount('');
     await loadDocs(d.id);
   }
 
@@ -192,6 +197,7 @@ export function WorkOrdersPanel({ siteId, orders: initial, users, complaints }: 
     setBusy(true); setDErr('');
     const { error } = await supabaseBrowser().rpc('set_work_order_cost', {
       p_id: detail.id, p_cost: val, p_cost_note: costNote.trim() || undefined,
+      p_cash_account_id: costAccount || undefined,
     });
     setBusy(false);
     if (error) { setDErr(friendlyDbMessage(error.message)); return; }
@@ -218,6 +224,7 @@ export function WorkOrdersPanel({ siteId, orders: initial, users, complaints }: 
 
   const filtered = kindFilter ? orders.filter((o) => o.kind === kindFilter) : orders;
   const iptalCount = filtered.filter((o) => o.status === 'iptal').length;
+  const todayIso = todayLocalISO();
 
   return (
     <div className="flex flex-col gap-4">
@@ -267,6 +274,13 @@ export function WorkOrdersPanel({ siteId, orders: initial, users, complaints }: 
                       <p className="text-sm font-medium leading-snug text-slate-800">{o.title}</p>
                       {o.unit_label && <p className="text-[11px] text-slate-400">🏠 {o.unit_label}</p>}
                       {o.assignee_display && <p className="text-[11px] text-slate-500">👤 {o.assignee_display}</p>}
+                      {o.due_date && !['tamamlandi', 'iptal'].includes(o.status) && (
+                        o.due_date < todayIso ? (
+                          <p className="text-[11px] font-semibold text-red-600">⚠ Termin geçti: {date(o.due_date)}</p>
+                        ) : (
+                          <p className="text-[11px] text-slate-400">📅 Termin: {date(o.due_date)}</p>
+                        )
+                      )}
                       <div className="flex items-center justify-between pt-0.5">
                         {Number(o.cost) > 0 ? (
                           <span className="text-[11px] font-medium text-slate-600">{money(Number(o.cost), true)}</span>
@@ -288,6 +302,8 @@ export function WorkOrdersPanel({ siteId, orders: initial, users, complaints }: 
       {orders.length === 0 && (
         <Card><EmptyState>Henüz iş talebi yok. Sağ üstten yeni talep oluşturun.</EmptyState></Card>
       )}
+
+      <RecurringTemplates siteId={siteId} />
 
       {/* Yeni talep modalı */}
       {createOpen && (
@@ -394,6 +410,15 @@ export function WorkOrdersPanel({ siteId, orders: initial, users, complaints }: 
                       <input value={costVal} onChange={(e) => setCostVal(e.target.value)} className={inputCls} placeholder="0,00 ₺" inputMode="decimal" />
                       <input value={costNote} onChange={(e) => setCostNote(e.target.value)} className={inputCls} placeholder="Açıklama" />
                     </div>
+                    {accounts.length > 0 && (
+                      <select value={costAccount} onChange={(e) => setCostAccount(e.target.value)} className={inputCls}>
+                        <option value="">Kasaya işleme (yalnız maliyet bilgisi)</option>
+                        {accounts.map((a) => <option key={a.id} value={a.id}>Kasadan düş: {a.ad}</option>)}
+                      </select>
+                    )}
+                    {costAccount && (
+                      <p className="text-[11px] text-slate-400">Seçilen hesaba "Tamir" gideri yazılır ve bu işe bağlanır; tutarı güncellerseniz gider de güncellenir. Kasa ekranından ikinci kez girmeyin.</p>
+                    )}
                     <button onClick={submitCost} disabled={busy} className="self-start rounded-lg bg-slate-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-800 disabled:opacity-50">
                       Maliyeti Kaydet
                     </button>
@@ -402,8 +427,11 @@ export function WorkOrdersPanel({ siteId, orders: initial, users, complaints }: 
               </>
             )}
 
+            {detail.assignee_phone && (
+              <p className="text-sm text-slate-600">Görevli telefonu: <PhoneLink phone={detail.assignee_phone} /></p>
+            )}
             {ro && detail.assignee_display && (
-              <p className="text-sm text-slate-600">Görevli: <span className="font-medium">{detail.assignee_display}</span>{detail.assignee_phone ? ` · ${detail.assignee_phone}` : ''}</p>
+              <p className="text-sm text-slate-600">Görevli: <span className="font-medium">{detail.assignee_display}</span></p>
             )}
             {ro && Number(detail.cost) > 0 && (
               <p className="text-sm text-slate-600">Maliyet: <span className="font-medium">{money(Number(detail.cost), true)}</span></p>
@@ -451,6 +479,192 @@ export function WorkOrdersPanel({ siteId, orders: initial, users, complaints }: 
         </Modal>
       )}
     </div>
+  );
+}
+
+/** Rapor #24: asansör bakımı, ilaçlama gibi düzenli işler için şablon — her gün 07:00 cron'u
+ *  vadesi gelen şablondan otomatik iş emri açar (run_work_order_templates). */
+type Template = {
+  id: string; title: string; description: string | null; kind: string; priority: string;
+  assignee_name: string | null; assignee_phone: string | null;
+  day_of_month: number; interval_months: number; due_days: number;
+  active: boolean; last_generated_period: string | null;
+};
+type TemplateForm = {
+  id: string | null; title: string; description: string; kind: string; priority: string;
+  assignee_name: string; assignee_phone: string; day_of_month: string; interval_months: string; due_days: string;
+};
+const EMPTY_TPL: TemplateForm = {
+  id: null, title: '', description: '', kind: 'bakim', priority: 'normal',
+  assignee_name: '', assignee_phone: '', day_of_month: '1', interval_months: '1', due_days: '7',
+};
+
+function RecurringTemplates({ siteId }: { siteId: string }) {
+  const ro = useReadOnly();
+  const [rows, setRows] = useState<Template[]>([]);
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState<TemplateForm>(EMPTY_TPL);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+
+  async function reload() {
+    const { data } = await supabaseBrowser()
+      .from('work_order_templates')
+      .select('id, title, description, kind, priority, assignee_name, assignee_phone, day_of_month, interval_months, due_days, active, last_generated_period')
+      .eq('site_id', siteId)
+      .order('day_of_month', { ascending: true });
+    setRows((data ?? []) as Template[]);
+  }
+  useEffect(() => { reload(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function openNew() { setForm(EMPTY_TPL); setErr(''); setOpen(true); }
+  function openEdit(t: Template) {
+    setForm({
+      id: t.id, title: t.title, description: t.description ?? '', kind: t.kind, priority: t.priority,
+      assignee_name: t.assignee_name ?? '', assignee_phone: t.assignee_phone ?? '',
+      day_of_month: String(t.day_of_month), interval_months: String(t.interval_months), due_days: String(t.due_days),
+    });
+    setErr(''); setOpen(true);
+  }
+
+  async function submit() {
+    if (!form.title.trim()) { setErr('Başlık girin.'); return; }
+    const day = Number(form.day_of_month), months = Number(form.interval_months), dueDays = Number(form.due_days);
+    if (!Number.isInteger(day) || day < 1 || day > 28) { setErr('Ayın günü 1–28 arası olmalı.'); return; }
+    if (!Number.isInteger(months) || months < 1 || months > 12) { setErr('Tekrar aralığı 1–12 ay arası olmalı.'); return; }
+    if (!Number.isInteger(dueDays) || dueDays < 0 || dueDays > 60) { setErr('Termin süresi 0–60 gün arası olmalı.'); return; }
+    setBusy(true); setErr('');
+    const sb = supabaseBrowser();
+    const payload = {
+      title: form.title.trim(),
+      description: form.description.trim() || null,
+      kind: form.kind, priority: form.priority,
+      assignee_name: form.assignee_name.trim() || null,
+      assignee_phone: form.assignee_phone.trim() || null,
+      day_of_month: day, interval_months: months, due_days: dueDays,
+    };
+    const { error } = form.id
+      ? await sb.from('work_order_templates').update(payload).eq('id', form.id)
+      : await sb.from('work_order_templates').insert({ site_id: siteId, ...payload });
+    setBusy(false);
+    if (error) { setErr(friendlyDbMessage(error.message)); return; }
+    setOpen(false);
+    await reload();
+  }
+
+  async function toggleActive(t: Template) {
+    setBusy(true);
+    await supabaseBrowser().from('work_order_templates').update({ active: !t.active }).eq('id', t.id);
+    setBusy(false);
+    await reload();
+  }
+
+  async function remove(t: Template) {
+    if (!confirm(`"${t.title}" şablonu silinsin mi? (Açılmış iş emirleri silinmez.)`)) return;
+    setBusy(true);
+    const { error } = await supabaseBrowser().from('work_order_templates').delete().eq('id', t.id);
+    setBusy(false);
+    if (error) { alert('Silinemedi: ' + friendlyDbMessage(error.message)); return; }
+    await reload();
+  }
+
+  return (
+    <Card
+      title="🔁 Periyodik İş Şablonları"
+      action={!ro && (
+        <button onClick={openNew} className="rounded-lg border border-blue-300 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-50">
+          + Şablon Ekle
+        </button>
+      )}
+    >
+      {rows.length === 0 ? (
+        <EmptyState>
+          Şablon yok. Asansör aylık bakımı, ilaçlama, hidrofor kontrolü gibi düzenli işleri şablona bağlayın —
+          her ay vaktinde otomatik iş emri açılır, siz hatırlamak zorunda kalmazsınız.
+        </EmptyState>
+      ) : (
+        <div className="flex flex-col divide-y divide-slate-50">
+          {rows.map((t) => (
+            <div key={t.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+              <div className="min-w-0">
+                <p className="flex items-center gap-2 text-sm font-medium text-slate-800">
+                  {t.title}
+                  <Badge tone={KIND_TONE[t.kind] ?? 'slate'}>{KIND_LABEL[t.kind] ?? t.kind}</Badge>
+                  {!t.active && <Badge tone="slate">Duraklatıldı</Badge>}
+                </p>
+                <p className="text-xs text-slate-400">
+                  Her {t.interval_months > 1 ? `${t.interval_months} ayda bir` : 'ay'}, ayın {t.day_of_month}. günü
+                  {' · '}termin +{t.due_days} gün
+                  {t.assignee_name ? ` · 👤 ${t.assignee_name}` : ''}
+                  {t.last_generated_period ? ` · son üretim: ${date(t.last_generated_period)}` : ' · henüz üretilmedi'}
+                </p>
+              </div>
+              {!ro && (
+                <div className="flex items-center gap-3">
+                  <button onClick={() => toggleActive(t)} disabled={busy} className="text-xs font-medium text-slate-500 hover:underline disabled:opacity-50">
+                    {t.active ? 'Duraklat' : 'Devam Ettir'}
+                  </button>
+                  <button onClick={() => openEdit(t)} className="text-xs font-medium text-blue-600 hover:underline">Düzenle</button>
+                  <button onClick={() => remove(t)} disabled={busy} className="text-xs text-slate-400 hover:text-red-600 disabled:opacity-50">Sil</button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {open && (
+        <Modal title={form.id ? 'Şablonu Düzenle' : 'Periyodik İş Şablonu'} onClose={() => setOpen(false)}>
+          <div className="flex flex-col gap-3">
+            <Field label="Başlık *">
+              <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} className={inputCls} placeholder="örn. Asansör aylık bakımı" />
+            </Field>
+            <Field label="Açıklama">
+              <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className={inputCls} rows={2} />
+            </Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Talep Tipi">
+                <select value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value })} className={inputCls}>
+                  {Object.entries(KIND_LABEL).map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+                </select>
+              </Field>
+              <Field label="Öncelik">
+                <select value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })} className={inputCls}>
+                  {Object.entries(PRIORITY_LABEL).map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+                </select>
+              </Field>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <Field label="Ayın günü (1–28)">
+                <input value={form.day_of_month} onChange={(e) => setForm({ ...form, day_of_month: e.target.value })} className={inputCls} inputMode="numeric" />
+              </Field>
+              <Field label="Tekrar (ay)">
+                <input value={form.interval_months} onChange={(e) => setForm({ ...form, interval_months: e.target.value })} className={inputCls} inputMode="numeric" />
+              </Field>
+              <Field label="Termin (+gün)">
+                <input value={form.due_days} onChange={(e) => setForm({ ...form, due_days: e.target.value })} className={inputCls} inputMode="numeric" />
+              </Field>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Görevli / Firma (ops.)">
+                <input value={form.assignee_name} onChange={(e) => setForm({ ...form, assignee_name: e.target.value })} className={inputCls} placeholder="örn. Kone servisi" />
+              </Field>
+              <Field label="Telefon (ops.)">
+                <input value={form.assignee_phone} onChange={(e) => setForm({ ...form, assignee_phone: e.target.value })} className={inputCls} />
+              </Field>
+            </div>
+            <p className="text-xs text-slate-400">Her sabah 07:00'de kontrol edilir: sırası gelen şablondan iş emri açılır ve bildirim gelir. Aynı ay içinde ikinci kez üretilmez.</p>
+            {err && <p className="text-sm text-red-600">{err}</p>}
+            <div className="flex justify-end gap-2 pt-1">
+              <button onClick={() => setOpen(false)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50">İptal</button>
+              <button onClick={submit} disabled={busy} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+                {busy ? 'Kaydediliyor…' : 'Kaydet'}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </Card>
   );
 }
 

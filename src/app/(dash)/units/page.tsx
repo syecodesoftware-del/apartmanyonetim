@@ -1,7 +1,7 @@
 import { requireManager } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
 import { PageHeader, StatCard } from '@/components/ui';
-import { UnitsHub, type HubRow, type BlockOption, type Occupant } from '@/components/UnitsHub';
+import { UnitsHub, type HubRow, type BlockOption, type Occupant, type AccountOption } from '@/components/UnitsHub';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,7 +14,7 @@ export default async function UnitsPage({ searchParams }: { searchParams: Promis
   const sb = await supabaseServer();
   const { f } = await searchParams;
 
-  const [unitsRes, blocksRes, occRes, balRes] = await Promise.all([
+  const [unitsRes, blocksRes, occRes, balRes, accRes] = await Promise.all([
     sb.from('units').select('id, block, apartment_number, floor, arsa_payi, m2, ada_id')
       .eq('site_id', manager.siteId)
       .order('block', { ascending: true }).order('apartment_number', { ascending: true }),
@@ -23,6 +23,8 @@ export default async function UnitsPage({ searchParams }: { searchParams: Promis
       .eq('site_id', manager.siteId),
     sb.from('unit_balances').select('unit_id, kalan_anapara, kalan_gecikme, toplam_borc, avans, net_borc')
       .eq('site_id', manager.siteId),
+    sb.from('cash_accounts').select('id, ad, tur').eq('site_id', manager.siteId).eq('is_active', true)
+      .order('created_at', { ascending: true }),
   ]);
 
   const occByUnit = new Map<string, { malik?: Occupant; kiraci?: Occupant }>();
@@ -71,7 +73,7 @@ export default async function UnitsPage({ searchParams }: { searchParams: Promis
         <StatCard label="Toplam Açık Borç" value={`₺${Math.round(totalDebt).toLocaleString('tr-TR')}`} tone={totalDebt > 0 ? 'danger' : 'success'} icon="💰" />
         <StatCard label="Uygulaması Olmayan" value={noAppCount} hint={totalAdvance > 0.005 ? `Toplam avans ₺${Math.round(totalAdvance).toLocaleString('tr-TR')}` : undefined} icon="📱" />
       </div>
-      <UnitsHub rows={rows} blockOptions={blockOptions} siteId={manager.siteId} initialFilter={f} />
+      <UnitsHub rows={rows} blockOptions={blockOptions} siteId={manager.siteId} siteName={manager.siteName} initialFilter={f} accounts={(accRes.data ?? []) as AccountOption[]} />
     </>
   );
 }

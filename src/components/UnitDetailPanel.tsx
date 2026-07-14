@@ -5,11 +5,11 @@ import { useRouter } from 'next/navigation';
 import { supabaseBrowser } from '@/lib/supabaseBrowser';
 import { Card, Table, Th, Td, EmptyState, Badge } from '@/components/ui';
 import { Modal, Field, inputCls } from '@/components/UnitsPanel';
-import { Segmented } from '@/components/controls';
+import { CollectModal, type AccountOption } from '@/components/CollectModal';
 import { WaiveControls } from '@/components/WaiveControls';
+import { PhoneLink } from '@/components/PhoneLink';
 import { useReadOnly } from '@/components/ReadOnly';
 import { money, date } from '@/lib/format';
-import { parseTrAmount, sanitizeAmountInput } from '@/lib/amount';
 import { friendlyDbMessage } from '@/lib/error';
 
 export type Tenancy = {
@@ -46,6 +46,8 @@ export function UnitDetailPanel({
   kalanGecikme,
   ledger,
   residents,
+  accounts = [],
+  siteName = '',
 }: {
   unitId: string;
   siteId: string;
@@ -56,6 +58,8 @@ export function UnitDetailPanel({
   kalanGecikme: number;
   ledger: LedgerRow[];
   residents: ResidentOption[];
+  accounts?: AccountOption[];
+  siteName?: string;
 }) {
   const router = useRouter();
   const ro = useReadOnly();
@@ -64,14 +68,15 @@ export function UnitDetailPanel({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Tahsilat modalı (Daire 360 — tahsilat daire kartından alınır)
+  // Tahsilat modalı (ortak CollectModal)
   const [collectOpen, setCollectOpen] = useState(false);
-  const [amount, setAmount] = useState('');
-  // 'bank' — collections_method_check yalnız cash/bank/online/qr kabul eder
-  const [method, setMethod] = useState<'cash' | 'bank'>('cash');
-  const [collecting, setCollecting] = useState(false);
-  const [collectError, setCollectError] = useState('');
   const [info, setInfo] = useState<string | null>(null);
+
+  // Tahsilat iptali (storno)
+  const [cancelTarget, setCancelTarget] = useState<LedgerRow | null>(null);
+  const [cancelReason, setCancelReason] = useState('');
+  const [cancelBusy, setCancelBusy] = useState(false);
+  const [cancelError, setCancelError] = useState('');
 
   const currentOwner = tenancies.find((t) => t.relationship === 'malik' && !t.end_date) ?? null;
   const currentTenant = tenancies.find((t) => t.relationship === 'kiraci' && !t.end_date) ?? null;
@@ -161,24 +166,76 @@ export function UnitDetailPanel({
   }
 
   function openCollect() {
-    setAmount(totalDebt > 0.005 ? String(Math.round(totalDebt * 100) / 100) : '');
-    setMethod('cash'); setCollectError(''); setInfo(null);
+    setInfo(null);
     setCollectOpen(true);
   }
 
-  async function collect(e: React.FormEvent) {
+  function openCancel(r: LedgerRow) {
+    setCancelTarget(r);
+    setCancelReason('');
+    setCancelError('');
+  }
+
+  function esc(s: string): string {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  /** Cari hesap ekstresini yazdır — sakine verilecek resmi döküm. */
+  function printStatement() {
+    const rows = statement.map((r) => {
+      const isTahsilat = r.tur === 'tahsilat';
+      return `<tr>
+        <td>${date(r.tarih)}</td>
+        <td>${isTahsilat ? 'Tahsilat' : 'Tahakkuk'}${r.durum === 'waived' ? ' (vazgeçildi)' : ''}</td>
+        <td>${esc(r.aciklama ?? '')}</td>
+        <td class="num">${Number(r.borc ?? 0) > 0.005 && r.durum !== 'waived' ? money(Number(r.borc), true) : ''}</td>
+        <td class="num">${Number(r.odeme ?? 0) > 0.005 ? money(Number(r.odeme), true) : ''}</td>
+        <td class="num">${money(r.bakiye, true)}</td>
+      </tr>`;
+    }).join('');
+    const html = `<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>Cari Hesap Ekstresi — ${esc(unitLabel)}</title>
+<style>
+body{font-family:Georgia,serif;color:#111;margin:36px;font-size:12px}
+h1{font-size:16px;text-align:center;margin:0}
+h2{font-size:13px;text-align:center;font-weight:normal;margin:4px 0 18px;color:#444}
+table{width:100%;border-collapse:collapse}
+th,td{border:1px solid #999;padding:4px 7px;text-align:left}
+th{background:#f0f0f0;font-size:11px}
+.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.totals td{font-weight:bold;background:#fafafa}
+.foot{margin-top:22px;text-align:center;font-size:10px;color:#777}
+@media print{body{margin:12mm}}
+</style></head><body>
+<h1>CARİ HESAP EKSTRESİ</h1>
+<h2>${esc(siteName)} — Daire ${esc(unitLabel)}</h2>
+<table>
+<thead><tr><th>Tarih</th><th>İşlem</th><th>Açıklama</th><th class="num">Borç</th><th class="num">Ödeme</th><th class="num">Bakiye</th></tr></thead>
+<tbody>
+${rows}
+<tr class="totals"><td colspan="5">GÜNCEL BAKİYE</td><td class="num">${money(totalDebt, true)}</td></tr>
+</tbody></table>
+<p class="foot">Bu ekstre ${new Date().toLocaleString('tr-TR')} tarihinde Komşu Asistanı üzerinden düzenlenmiştir.</p>
+</body></html>`;
+    const w = window.open('', '_blank', 'width=900,height=1000');
+    if (!w) { window.alert('Yazdırma penceresi açılamadı (pop-up engelleyiciyi kapatın).'); return; }
+    w.document.write(html);
+    w.document.close();
+    w.focus();
+    setTimeout(() => w.print(), 300);
+  }
+
+  async function cancelCollection(e: React.FormEvent) {
     e.preventDefault();
-    const amt = parseTrAmount(amount);
-    if (!Number.isFinite(amt) || amt <= 0) { setCollectError('Geçerli bir tutar giriniz (örn. 750 veya 1.234,50).'); return; }
-    setCollecting(true); setCollectError('');
-    const { data, error } = await supabaseBrowser().rpc('record_collection', {
-      p_site_id: siteId, p_unit_id: unitId, p_amount: amt, p_method: method,
+    if (!cancelTarget?.id) return;
+    if (!cancelReason.trim()) { setCancelError('İptal gerekçesi zorunludur.'); return; }
+    setCancelBusy(true); setCancelError('');
+    const { error } = await supabaseBrowser().rpc('cancel_collection', {
+      p_collection_id: cancelTarget.id, p_reason: cancelReason.trim(),
     });
-    setCollecting(false);
-    if (error) { setCollectError(friendlyDbMessage(error.message)); return; }
-    const leftover = Number(data ?? 0);
-    setCollectOpen(false);
-    setInfo(leftover > 0 ? `Tahsilat alındı. ${money(leftover, true)} avans/artan olarak kaydedildi.` : 'Tahsilat alındı.');
+    setCancelBusy(false);
+    if (error) { setCancelError(friendlyDbMessage(error.message)); return; }
+    setCancelTarget(null);
+    setInfo('Tahsilat iptal edildi — mahsup edilen borçlar geri açıldı.');
     router.refresh();
   }
 
@@ -221,7 +278,7 @@ export function UnitDetailPanel({
           {currentOwner ? (
             <div className="space-y-1">
               <p className="text-sm font-semibold text-slate-800">{currentOwner.full_name}</p>
-              <p className="text-xs text-slate-500">{currentOwner.phone ?? 'Telefon yok'}</p>
+              {currentOwner.phone ? <PhoneLink phone={currentOwner.phone} /> : <p className="text-xs text-slate-500">Telefon yok</p>}
               <p className="text-xs text-slate-400">Başlangıç: {date(currentOwner.start_date)}</p>
               {currentOwner.user_id && <Badge tone="green">Uygulama kullanıcısı</Badge>}
             </div>
@@ -248,7 +305,7 @@ export function UnitDetailPanel({
             <div className="space-y-2">
               <div>
                 <p className="text-sm font-semibold text-slate-800">{currentTenant.full_name}</p>
-                <p className="text-xs text-slate-500">{currentTenant.phone ?? 'Telefon yok'}</p>
+                {currentTenant.phone ? <PhoneLink phone={currentTenant.phone} /> : <p className="text-xs text-slate-500">Telefon yok</p>}
                 <p className="text-xs text-slate-400">Başlangıç: {date(currentTenant.start_date)}</p>
                 {currentTenant.user_id && <Badge tone="green">Uygulama kullanıcısı</Badge>}
               </div>
@@ -347,6 +404,7 @@ export function UnitDetailPanel({
                 <Th>Tarih</Th>
                 <Th>Açıklama</Th>
                 <Th className="text-right">Tutar</Th>
+                {!ro && <Th className="text-right">İşlem</Th>}
               </tr>
             </thead>
             <tbody>
@@ -357,6 +415,15 @@ export function UnitDetailPanel({
                   <Td className="text-right font-bold tabular-nums text-emerald-600">
                     + {money(Number(r.odeme ?? 0), true)}
                   </Td>
+                  {!ro && (
+                    <Td className="text-right">
+                      {r.id && (
+                        <button onClick={() => openCancel(r)} className="text-xs font-semibold text-red-600 hover:underline">
+                          İptal Et
+                        </button>
+                      )}
+                    </Td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -365,7 +432,16 @@ export function UnitDetailPanel({
       </Card>
 
       {/* CARİ HESAP EKSTRESİ */}
-      <Card title="Cari Hesap Ekstresi">
+      <Card
+        title="Cari Hesap Ekstresi"
+        action={
+          statement.length > 0 ? (
+            <button onClick={printStatement} className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-50">
+              🖨 Ekstreyi Yazdır
+            </button>
+          ) : undefined
+        }
+      >
         {statement.length === 0 ? (
           <EmptyState>Hareket kaydı yok.</EmptyState>
         ) : (
@@ -462,22 +538,32 @@ export function UnitDetailPanel({
       </Card>
 
       {collectOpen && (
-        <Modal title={`Tahsilat Al — ${unitLabel}`} onClose={() => setCollectOpen(false)}>
-          <p className="mb-3 text-sm text-slate-500">
-            Açık borç: <span className="font-semibold text-slate-700">{money(totalDebt, true)}</span>
+        <CollectModal
+          siteId={siteId}
+          unitId={unitId}
+          unitLabel={unitLabel}
+          siteName={siteName}
+          totalDebt={totalDebt}
+          accounts={accounts}
+          onClose={() => setCollectOpen(false)}
+          onDone={(msg) => { setCollectOpen(false); setInfo(msg); router.refresh(); }}
+        />
+      )}
+
+      {cancelTarget && (
+        <Modal title="Tahsilatı İptal Et" onClose={() => setCancelTarget(null)}>
+          <p className="mb-3 text-sm text-slate-600">
+            {date(cancelTarget.tarih)} tarihli <span className="font-semibold">{money(Number(cancelTarget.odeme ?? 0), true)}</span> tahsilat iptal edilecek.
+            Mahsup edilen borçlar geri açılır; işlem denetim kaydına yazılır.
           </p>
-          <form onSubmit={collect} className="space-y-3">
-            <Field label="Tutar (₺)">
-              <input value={amount} onChange={(e) => setAmount(sanitizeAmountInput(e.target.value))} inputMode="decimal" autoFocus placeholder="örn. 750 veya 1.234,50" className={inputCls} />
+          <form onSubmit={cancelCollection} className="space-y-3">
+            <Field label="İptal Gerekçesi *">
+              <input value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} autoFocus placeholder="örn. Tutar yanlış girildi" className={inputCls} />
             </Field>
-            <Field label="Yöntem">
-              <Segmented value={method} onChange={setMethod} options={[{ value: 'cash', label: 'Nakit' }, { value: 'bank', label: 'Havale/EFT' }]} />
-            </Field>
-            <p className="text-xs text-slate-400">Tahsilat en eski borçtan başlanarak mahsup edilir; artan tutar avans olarak kaydedilir.</p>
-            {collectError && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{collectError}</p>}
+            {cancelError && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{cancelError}</p>}
             <div className="flex justify-end gap-2 pt-1">
-              <button type="button" onClick={() => setCollectOpen(false)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50">Vazgeç</button>
-              <button type="submit" disabled={collecting} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60">{collecting ? 'Kaydediliyor…' : 'Tahsilatı Kaydet'}</button>
+              <button type="button" onClick={() => setCancelTarget(null)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50">Vazgeç</button>
+              <button type="submit" disabled={cancelBusy} className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60">{cancelBusy ? 'İptal ediliyor…' : 'Tahsilatı İptal Et'}</button>
             </div>
           </form>
         </Modal>

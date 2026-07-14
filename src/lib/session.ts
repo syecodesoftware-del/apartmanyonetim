@@ -6,9 +6,11 @@ export type ManagerSession = {
   userId: string;
   email: string;
   fullName: string | null;
-  role: 'manager' | 'admin' | 'auditor';
+  role: 'manager' | 'admin' | 'auditor' | 'gorevli';
   /** Denetçi (auditor) → salt-okuma. Tüm yazma kontrolleri UI'da gizlenir; DB'de RLS zaten engeller. */
   readOnly: boolean;
+  /** Kapı görevlisi → yalnız Kapı & Ziyaretçi ekranı. Diğer modül RPC'leri DB'de zaten reddeder. */
+  gateOnly: boolean;
   /** Aktif site (aktif-işaretçi modeli: users.site_id). */
   siteId: string;
   siteName: string;
@@ -16,7 +18,7 @@ export type ManagerSession = {
   memberships: { siteId: string; siteName: string; role: string }[];
 };
 
-const STAFF_ROLES = ['manager', 'admin', 'auditor'];
+const STAFF_ROLES = ['manager', 'admin', 'auditor', 'gorevli'];
 
 /**
  * Geçerli oturumu okur ve kullanıcının panel-yetkili (manager/admin/auditor) olduğunu doğrular.
@@ -56,8 +58,9 @@ export async function getManager(): Promise<ManagerSession | null> {
     userId: profile.id,
     email: profile.email,
     fullName: profile.full_name,
-    role: profile.role as 'manager' | 'admin' | 'auditor',
+    role: profile.role as 'manager' | 'admin' | 'auditor' | 'gorevli',
     readOnly: profile.role === 'auditor',
+    gateOnly: profile.role === 'gorevli',
     siteId: profile.site_id,
     siteName: site?.name ?? '—',
     memberships: (memberships ?? [])

@@ -62,7 +62,9 @@ const ALL: Status[] = ['open', 'in_progress', 'resolved', 'rejected', 'closed'];
 const PRIORITY: Record<string, string> = { low: 'Düşük', normal: 'Normal', high: 'Yüksek' };
 const RESOLVED_SET = new Set<Status>(['resolved', 'rejected', 'closed']);
 
-export function ComplaintsPanel({ complaints, managerId }: { complaints: ComplaintRow[]; managerId: string }) {
+export function ComplaintsPanel({ complaints, managerId, convertedIds = [] }: {
+  complaints: ComplaintRow[]; managerId: string; convertedIds?: string[];
+}) {
   const router = useRouter();
   const ro = useReadOnly();
   const [target, setTarget] = useState<ComplaintRow | null>(null);
@@ -70,6 +72,33 @@ export function ComplaintsPanel({ complaints, managerId }: { complaints: Complai
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [converting, setConverting] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
+  const [converted, setConverted] = useState<Set<string>>(new Set(convertedIds));
+
+  // Rapor #21: 50 şikayet birikince tek düz liste olmasın — durum + kategori filtresi
+  const [statusFilter, setStatusFilter] = useState<'acik' | 'all' | Status>('acik');
+  const [catFilter, setCatFilter] = useState('');
+  const categories = [...new Set(complaints.map((c) => c.category))].sort((a, b) => a.localeCompare(b, 'tr'));
+
+  const visible = complaints.filter((c) => {
+    const st = (c.status as Status) ?? 'open';
+    if (statusFilter === 'acik' && !['open', 'in_progress'].includes(st)) return false;
+    if (statusFilter !== 'acik' && statusFilter !== 'all' && st !== statusFilter) return false;
+    if (catFilter && c.category !== catFilter) return false;
+    return true;
+  });
+
+  async function convertToWorkOrder(c: ComplaintRow) {
+    if (!confirm(`"${c.title}" şikayetinden iş emri açılsın mı? Şikayet "İşlemde" durumuna alınır.`)) return;
+    setConverting(c.id); setInfo(null);
+    const { error } = await supabaseBrowser().rpc('convert_complaint_to_work_order', { p_complaint_id: c.id });
+    setConverting(null);
+    if (error) { alert('Dönüştürülemedi: ' + error.message); return; }
+    setConverted((s) => new Set(s).add(c.id));
+    setInfo(`"${c.title}" için iş emri açıldı — İş Takibi ekranından yönetebilirsiniz.`);
+    router.refresh();
+  }
 
   function open(c: ComplaintRow) {
     setTarget(c);
@@ -100,10 +129,31 @@ export function ComplaintsPanel({ complaints, managerId }: { complaints: Complai
 
   if (complaints.length === 0) return <Card><EmptyState>Henüz şikayet yok.</EmptyState></Card>;
 
+  const fchip = (active: boolean) =>
+    `rounded-full px-3 py-1 text-xs font-medium transition ${active ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`;
+
   return (
     <>
+      {info && <p className="mb-3 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">✓ {info}</p>}
+
+      <div className="mb-3 flex flex-wrap items-center gap-1.5">
+        <button className={fchip(statusFilter === 'acik')} onClick={() => setStatusFilter('acik')}>Açık + İşlemde</button>
+        <button className={fchip(statusFilter === 'all')} onClick={() => setStatusFilter('all')}>Tümü</button>
+        {ALL.map((s) => (
+          <button key={s} className={fchip(statusFilter === s)} onClick={() => setStatusFilter(s)}>{STATUS[s].label}</button>
+        ))}
+        {categories.length > 1 && (
+          <select value={catFilter} onChange={(e) => setCatFilter(e.target.value)} className="ml-auto rounded-lg border border-slate-300 px-2 py-1.5 text-xs font-semibold text-slate-600 outline-none focus:border-blue-500">
+            <option value="">Tüm kategoriler</option>
+            {categories.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+        )}
+      </div>
+
+      {visible.length === 0 && <Card><EmptyState>Filtreyle eşleşen şikayet yok.</EmptyState></Card>}
+
       <div className="space-y-3">
-        {complaints.map((c) => {
+        {visible.map((c) => {
           const st = STATUS[(c.status as Status) ?? 'open'] ?? STATUS.open;
           return (
             <div key={c.id} className="rounded-xl border border-slate-200 bg-white p-4">
@@ -115,6 +165,7 @@ export function ComplaintsPanel({ complaints, managerId }: { complaints: Complai
                     <Badge tone="blue">{c.category}</Badge>
                     {c.priority && <Badge tone={c.priority === 'high' ? 'red' : 'slate'}>{PRIORITY[c.priority] ?? c.priority}</Badge>}
                     {c.is_anonymous && <Badge tone="slate">🕶️ Anonim</Badge>}
+                    {converted.has(c.id) && <Badge tone="blue">🔧 İş emri açıldı</Badge>}
                   </div>
                   {c.description && <p className="mt-1 whitespace-pre-wrap text-sm text-slate-600">{c.description}</p>}
                   {c.photos && c.photos.length > 0 && <ComplaintPhotos paths={c.photos} />}
@@ -123,7 +174,20 @@ export function ComplaintsPanel({ complaints, managerId }: { complaints: Complai
                     <p className="mt-2 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800"><span className="font-semibold">Çözüm notu:</span> {c.resolution_note}</p>
                   )}
                 </div>
-                {!ro && <button onClick={() => open(c)} className="shrink-0 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50">Durumu Güncelle</button>}
+                {!ro && (
+                  <div className="flex shrink-0 flex-col items-end gap-1.5">
+                    <button onClick={() => open(c)} className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50">Durumu Güncelle</button>
+                    {!converted.has(c.id) && ['open', 'in_progress'].includes((c.status as Status) ?? 'open') && (
+                      <button
+                        onClick={() => convertToWorkOrder(c)}
+                        disabled={converting === c.id}
+                        className="rounded-lg border border-blue-300 px-3 py-1.5 text-xs font-semibold text-blue-700 transition hover:bg-blue-50 disabled:opacity-50"
+                      >
+                        {converting === c.id ? 'Açılıyor…' : '🔧 İş Emrine Dönüştür'}
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           );

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { supabaseBrowser } from '@/lib/supabaseBrowser';
 import { Card, Table, Th, Td, EmptyState, Badge } from '@/components/ui';
 import { Modal, Field, inputCls } from '@/components/UnitsPanel';
+import { BankImportModal } from '@/components/BankImportModal';
 import { Segmented } from '@/components/controls';
 import { useReadOnly } from '@/components/ReadOnly';
 import { money, date } from '@/lib/format';
@@ -87,10 +88,12 @@ export function ReconcilePanel({ transactions, accountId, siteId, managerId, uni
   const [tParty, setTParty] = useState('');
   const [tRef, setTRef] = useState('');
 
-  // Toplu içe aktar
+  // Toplu içe aktar (dosya + kolon eşleştirme — BankImportModal)
   const [importOpen, setImportOpen] = useState(false);
-  const [importText, setImportText] = useState('');
   const [importResult, setImportResult] = useState<string | null>(null);
+
+  // Otomatik eşleştirme
+  const [autoBusy, setAutoBusy] = useState(false);
 
   // Eşleştirme
   const [matchTxn, setMatchTxn] = useState<Txn | null>(null);
@@ -118,27 +121,69 @@ export function ReconcilePanel({ transactions, accountId, siteId, managerId, uni
     router.refresh();
   }
 
-  async function runImport() {
-    setBusy(true); setImportResult(null);
-    const lines = importText.split('\n').map((l) => l.trim()).filter(Boolean);
-    let inserted = 0, skipped = 0; const bad: number[] = [];
-    for (let i = 0; i < lines.length; i++) {
-      const parts = lines[i].split(/[\t;]/).map((s) => s.trim());
-      if (parts.length < 3) { bad.push(i + 1); continue; }
-      const [d, y, a, desc, ref] = parts;
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) { bad.push(i + 1); continue; }
-      const dir = /^(g|giris|giriş|\+)$/i.test(y) ? 'giris' : /^(c|cikis|çıkış|cıkıs|-)$/i.test(y) ? 'cikis' : null;
-      if (!dir) { bad.push(i + 1); continue; }
-      const amount = parseTrAmount(a);
-      if (!Number.isFinite(amount) || amount <= 0) { bad.push(i + 1); continue; }
-      const { error } = await sb.from('bank_transactions').insert({
-        site_id: siteId, cash_account_id: accountId, txn_date: d, direction: dir, amount,
-        description: desc?.trim() || null, bank_ref: ref?.trim() || null, created_by: managerId,
-      });
-      if (error) { if (error.code === '23505') skipped++; else bad.push(i + 1); } else inserted++;
+  /** Otomatik eşleştir: eşleşmemiş satırları tutar (±1 kuruş) + tarih (±3 gün) yakınlığıyla
+   *  defterdeki tahsilat/giderlerle eşler. Her aday bir kez kullanılır. */
+  async function autoMatch() {
+    const pending = transactions.filter((t) => t.match_status === 'unmatched');
+    if (pending.length === 0) { setImportResult('Eşleşmemiş satır yok.'); return; }
+    setAutoBusy(true); setImportResult(null);
+
+    // Zaten eşleşmiş hedefleri düş (site genelinde)
+    const { data: matchedRows } = await sb.from('bank_transactions')
+      .select('matched_collection_id, matched_expense_id').eq('site_id', siteId).eq('match_status', 'matched').limit(10000);
+    const usedCol = new Set((matchedRows ?? []).map((m) => m.matched_collection_id).filter(Boolean) as string[]);
+    const usedExp = new Set((matchedRows ?? []).map((m) => m.matched_expense_id).filter(Boolean) as string[]);
+
+    const [{ data: cols }, { data: exps }] = await Promise.all([
+      sb.from('collections').select('id, amount, paid_at, cash_account_id, method')
+        .eq('site_id', siteId)
+        .or(`cash_account_id.eq.${accountId},and(cash_account_id.is.null,method.eq.online)`)
+        .order('paid_at', { ascending: false }).limit(1000),
+      sb.from('cash_expenses').select('id, amount, spent_at')
+        .eq('cash_account_id', accountId).order('spent_at', { ascending: false }).limit(1000),
+    ]);
+    const colCands = (cols ?? []).filter((c) => !usedCol.has(c.id));
+    const expCands = (exps ?? []).filter((e) => !usedExp.has(e.id));
+
+    const dayDiff = (a: string, b: string) => Math.abs((new Date(a).getTime() - new Date(b).getTime()) / 86_400_000);
+    let matched = 0;
+    for (const t of pending) {
+      if (t.direction === 'giris') {
+        let best = -1, bestD = 4;
+        colCands.forEach((c, i) => {
+          if (Math.abs(Number(c.amount) - t.amount) > 0.011 || !c.paid_at) return;
+          const d = dayDiff(t.txn_date, c.paid_at);
+          if (d <= 3 && d < bestD) { bestD = d; best = i; }
+        });
+        if (best >= 0) {
+          const c = colCands[best];
+          if (!c.cash_account_id) {
+            const { error: cErr } = await sb.from('collections').update({ cash_account_id: accountId }).eq('id', c.id).eq('method', 'online');
+            if (cErr) continue;
+          }
+          const { error } = await sb.from('bank_transactions')
+            .update({ match_status: 'matched', matched_collection_id: c.id, matched_expense_id: null }).eq('id', t.id);
+          if (!error) { matched++; colCands.splice(best, 1); }
+        }
+      } else {
+        let best = -1, bestD = 4;
+        expCands.forEach((e, i) => {
+          if (Math.abs(Number(e.amount) - t.amount) > 0.011 || !e.spent_at) return;
+          const d = dayDiff(t.txn_date, e.spent_at);
+          if (d <= 3 && d < bestD) { bestD = d; best = i; }
+        });
+        if (best >= 0) {
+          const e = expCands[best];
+          const { error } = await sb.from('bank_transactions')
+            .update({ match_status: 'matched', matched_expense_id: e.id, matched_collection_id: null }).eq('id', t.id);
+          if (!error) { matched++; expCands.splice(best, 1); }
+        }
+      }
     }
-    setBusy(false);
-    setImportResult(`${inserted} eklendi · ${skipped} atlandı (mükerrer)${bad.length ? ` · hatalı satır: ${bad.join(', ')}` : ''}`);
+    setAutoBusy(false);
+    setImportResult(matched > 0
+      ? `${matched} satır otomatik eşleşti (${pending.length - matched} satır elle bekliyor).`
+      : 'Otomatik eşleşecek satır bulunamadı — tutar/tarih birebir yakın kayıt yok.');
     router.refresh();
   }
 
@@ -216,7 +261,10 @@ export function ReconcilePanel({ transactions, accountId, siteId, managerId, uni
         action={
           ro ? undefined : (
             <div className="flex gap-2">
-              <button onClick={() => { setImportText(''); setImportResult(null); setImportOpen(true); }} className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50">Toplu İçe Aktar</button>
+              <button onClick={autoMatch} disabled={autoBusy} className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-50">
+                {autoBusy ? 'Eşleştiriliyor…' : '⚡ Otomatik Eşleştir'}
+              </button>
+              <button onClick={() => { setImportResult(null); setImportOpen(true); }} className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50">📄 Ekstre Yükle</button>
               <button onClick={openAdd} className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-blue-700">+ Hareket</button>
             </div>
           )
@@ -278,21 +326,15 @@ export function ReconcilePanel({ transactions, accountId, siteId, managerId, uni
         </Modal>
       )}
 
-      {/* Toplu içe aktar */}
+      {/* Toplu içe aktar — dosya + kolon eşleştirme */}
       {importOpen && (
-        <Modal title="Toplu Ekstre İçe Aktar" onClose={() => setImportOpen(false)}>
-          <p className="mb-2 text-xs text-slate-500">
-            Her satır (ayırıcı <code>;</code> veya TAB): <br />
-            <code>tarih(YYYY-AA-GG) ; yön(g/+/giris | c/-/cikis) ; tutar ; açıklama ; ref</code><br />
-            Mükerrer referanslar atlanır.
-          </p>
-          <textarea value={importText} onChange={(e) => setImportText(e.target.value)} rows={8} placeholder={'2026-06-01;g;1500;Aidat tahsilatı;REF001\n2026-06-02;c;300,50;Temizlik;REF002'} className={`${inputCls} font-mono text-xs`} />
-          {importResult && <p className="mt-2 rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-700">{importResult}</p>}
-          <div className="mt-3 flex justify-end gap-2">
-            <button type="button" onClick={() => setImportOpen(false)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50">Kapat</button>
-            <button onClick={runImport} disabled={busy || !importText.trim()} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60">{busy ? 'Aktarılıyor…' : 'İçe Aktar'}</button>
-          </div>
-        </Modal>
+        <BankImportModal
+          siteId={siteId}
+          accountId={accountId}
+          managerId={managerId}
+          onClose={() => setImportOpen(false)}
+          onDone={(msg) => { setImportOpen(false); setImportResult(msg); router.refresh(); }}
+        />
       )}
 
       {/* Onayla → Daireye Tahsilat */}

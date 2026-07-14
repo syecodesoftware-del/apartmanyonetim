@@ -11,6 +11,17 @@ export const dynamic = 'force-dynamic';
 
 const AY_KISA = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'];
 
+type QueueItem = { id: string; amount: number; overdue: boolean };
+type InspectionRow = { id: string };
+type WorkOrderRow = { id: string; status: string; due_date: string | null };
+type DmThread = { unread: number };
+type Summary = {
+  month_accruals: { paid: number; partial: number; open: number; open_amount: number };
+  aging: { fresh: number; mid: number; old: number };
+  trend: { y: number; m: number; tahakkuk: number; tahsilat: number }[];
+  month_collected: number;
+};
+
 export default async function DashboardPage() {
   const manager = await requireManager();
   const sb = await supabaseServer();
@@ -29,101 +40,133 @@ export default async function DashboardPage() {
   const month = now.getMonth() + 1;
   const year = now.getFullYear();
 
-  // Son 6 aylık pencere (bu ay dahil): trend grafiği için (yıl, ay) çiftleri
-  const windowMonths: { y: number; m: number }[] = [];
-  for (let i = 5; i >= 0; i--) {
-    const d = new Date(year, month - 1 - i, 1);
-    windowMonths.push({ y: d.getFullYear(), m: d.getMonth() + 1 });
-  }
-  const windowStartISO = new Date(windowMonths[0].y, windowMonths[0].m - 1, 1).toISOString();
-
   const [
     { count: totalResidents },
     { count: pendingApprovals },
-    { data: monthAccruals },
-    { data: collections },
+    summaryRes,
     { count: openComplaints },
     { data: recentPending },
-    { data: openDebts },
-    { data: trendAccruals },
+    { data: balances },
+    queueRes,
+    inspectionRes,
+    workOrdersRes,
+    dmRes,
+    packagesRes,
   ] = await Promise.all([
     sb.from('users').select('*', { count: 'exact', head: true })
       .eq('site_id', siteId).in('role', ['resident', 'manager']).eq('approval_status', 'approved'),
     sb.from('users').select('*', { count: 'exact', head: true })
       .eq('site_id', siteId).eq('approval_status', 'pending'),
-    // Bu ayın tahakkukları — halka grafiği + "ödendi/ödenmedi" kartları tek sorgudan
-    sb.from('accruals').select('status')
-      .eq('site_id', siteId).eq('period_month', month).eq('period_year', year),
-    sb.from('collections').select('amount, paid_at').eq('site_id', siteId),
+    // Bu ay aidat durumu + yaşlandırma + 6 aylık trend + bu ay tahsilat — tek aggregate RPC
+    // (eskiden 4 satır-bazlı sorguydu; 300 daire × 3 yılda on binlerce satır çekiyordu)
+    sb.rpc('get_dashboard_summary'),
     sb.from('complaints').select('*', { count: 'exact', head: true })
       .eq('site_id', siteId).in('status', ['open', 'in_progress']),
     sb.from('users').select('id, full_name, apartment_number, block, created_at')
       .eq('site_id', siteId).eq('approval_status', 'pending')
       .order('created_at', { ascending: false }).limit(5),
-    // Açık borç yaşlandırması: kapatılmamış tahakkukların kalan anaparası + vade
-    sb.from('accruals').select('principal_remaining, due_date')
-      .eq('site_id', siteId).in('status', ['open', 'partial']),
-    // Trend: son 6 ayın tahakkuk tutarları (dönem alanına göre)
-    sb.from('accruals').select('amount, period_month, period_year')
-      .eq('site_id', siteId).gte('period_year', windowMonths[0].y),
+    // Kasa & banka güncel bakiyeleri (virman dahil)
+    sb.from('cash_account_balances').select('cash_account_id, ad, tur, balance')
+      .eq('site_id', siteId).eq('is_active', true),
+    // Bugün/Dikkat sinyalleri
+    sb.rpc('get_payment_queue'),
+    sb.rpc('get_inspection_due', { p_within_days: 30 }),
+    sb.rpc('get_work_orders', { p_status: undefined }),
+    sb.rpc('get_dm_threads'),
+    sb.rpc('get_packages', { p_status: 'teslim_alindi' }),
   ]);
 
-  // ── Bu ay aidat durumu (halka 1) ──
-  const statuses = (monthAccruals ?? []).map((a) => a.status as string);
-  const paidThisMonth = statuses.filter((s) => s === 'paid').length;
-  const partialThisMonth = statuses.filter((s) => s === 'partial').length;
-  const openThisMonth = statuses.filter((s) => s === 'open').length;
+  const summary = (summaryRes.data ?? {
+    month_accruals: { paid: 0, partial: 0, open: 0, open_amount: 0 },
+    aging: { fresh: 0, mid: 0, old: 0 },
+    trend: [],
+    month_collected: 0,
+  }) as unknown as Summary;
+
+  // ── Bu ay aidat durumu (halka 1) + açık tutar ──
+  const paidThisMonth = Number(summary.month_accruals.paid ?? 0);
+  const partialThisMonth = Number(summary.month_accruals.partial ?? 0);
+  const openThisMonth = Number(summary.month_accruals.open ?? 0);
+  const monthOpenAmount = Number(summary.month_accruals.open_amount ?? 0);
   const monthTotal = paidThisMonth + partialThisMonth + openThisMonth;
   const paidPct = monthTotal > 0 ? Math.round((paidThisMonth / monthTotal) * 100) : 0;
 
   // ── Açık borç yaşlandırması (halka 2) ──
-  const today = now.getTime();
-  const aging = { fresh: 0, mid: 0, old: 0 };
-  for (const d of openDebts ?? []) {
-    const remaining = Number(d.principal_remaining ?? 0);
-    if (remaining <= 0) continue;
-    const days = d.due_date ? Math.floor((today - new Date(d.due_date).getTime()) / 86_400_000) : 0;
-    if (days > 90) aging.old += remaining;
-    else if (days > 30) aging.mid += remaining;
-    else aging.fresh += remaining;
-  }
+  const aging = {
+    fresh: Number(summary.aging.fresh ?? 0),
+    mid: Number(summary.aging.mid ?? 0),
+    old: Number(summary.aging.old ?? 0),
+  };
   const totalOpenDebt = aging.fresh + aging.mid + aging.old;
 
-  // ── Son 6 ay trendi (çizgi) ──
-  const accByPeriod = new Map<string, number>();
-  for (const a of trendAccruals ?? []) {
-    const key = `${a.period_year}-${a.period_month}`;
-    accByPeriod.set(key, (accByPeriod.get(key) ?? 0) + Number(a.amount ?? 0));
-  }
-  const colByPeriod = new Map<string, number>();
-  for (const c of collections ?? []) {
-    if (!c.paid_at || c.paid_at < windowStartISO) continue;
-    const d = new Date(c.paid_at);
-    const key = `${d.getFullYear()}-${d.getMonth() + 1}`;
-    colByPeriod.set(key, (colByPeriod.get(key) ?? 0) + Number(c.amount ?? 0));
-  }
-  const trend: TrendPoint[] = windowMonths.map(({ y, m }) => ({
-    label: AY_KISA[m - 1],
-    tahakkuk: accByPeriod.get(`${y}-${m}`) ?? 0,
-    tahsilat: colByPeriod.get(`${y}-${m}`) ?? 0,
+  // ── Son 6 ay trendi (çizgi) + bu ay tahsilatı ──
+  const monthCollected = Number(summary.month_collected ?? 0);
+  const trend: TrendPoint[] = (summary.trend ?? []).map((t) => ({
+    label: AY_KISA[t.m - 1],
+    tahakkuk: Number(t.tahakkuk ?? 0),
+    tahsilat: Number(t.tahsilat ?? 0),
   }));
 
-  const totalCollected = (collections ?? []).reduce((s, c) => s + (c.amount ?? 0), 0);
+  // ── Kasa & banka toplamı ──
+  const balanceRows = (balances ?? []) as { ad: string | null; balance: number | null }[];
+  const totalBalance = balanceRows.reduce((s, b) => s + Number(b.balance ?? 0), 0);
+  const balanceHint = balanceRows.length > 1
+    ? balanceRows.map((b) => `${b.ad}: ₺${Math.round(Number(b.balance ?? 0)).toLocaleString('tr-TR')}`).join(' · ')
+    : undefined;
+
+  // ── Bugün / Dikkat sinyalleri ──
+  const queue = ((queueRes.data ?? []) as unknown as QueueItem[]).filter((q) => q.overdue);
+  const overdueInvoiceTotal = queue.reduce((s, q) => s + Number(q.amount), 0);
+  const inspections = (inspectionRes.data ?? []) as unknown as InspectionRow[];
+  const todayISO = new Date(year, month - 1, now.getDate()).toISOString().slice(0, 10);
+  const lateWorkOrders = ((workOrdersRes.data ?? []) as unknown as WorkOrderRow[])
+    .filter((w) => w.due_date && w.due_date < todayISO && !['tamamlandi', 'iptal'].includes(w.status));
+  const unreadDm = ((dmRes.data ?? []) as unknown as DmThread[]).reduce((s, t) => s + Number(t.unread ?? 0), 0);
+  const pendingPackages = ((packagesRes.data ?? []) as unknown as { id: string }[]).length;
+
+  const attention: { icon: string; text: string; href: string; tone: 'red' | 'amber' | 'blue' }[] = [];
+  if (queue.length > 0) attention.push({ icon: '🧾', text: `${queue.length} faturanın vadesi geçti (toplam ${tlFmt(overdueInvoiceTotal)})`, href: '/suppliers', tone: 'red' });
+  if (lateWorkOrders.length > 0) attention.push({ icon: '🔧', text: `${lateWorkOrders.length} iş talebinin termini geçti`, href: '/work-orders', tone: 'red' });
+  if (inspections.length > 0) attention.push({ icon: '🛗', text: `${inspections.length} demirbaşın periyodik muayenesi yaklaşıyor/geçti`, href: '/inventory', tone: 'amber' });
+  if (unreadDm > 0) attention.push({ icon: '💬', text: `${unreadDm} okunmamış sakin mesajı var`, href: '/messages', tone: 'blue' });
+  if (pendingPackages > 0) attention.push({ icon: '📦', text: `${pendingPackages} kargo yönetimde teslim bekliyor`, href: '/gate', tone: 'blue' });
+  if ((pendingApprovals ?? 0) > 0) attention.push({ icon: '✅', text: `${pendingApprovals} sakin başvurusu onay bekliyor`, href: '/approvals', tone: 'amber' });
+
   const monthLabel = now.toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' });
-  const tl = (v: number) => `₺${Math.round(v).toLocaleString('tr-TR')}`;
 
   return (
     <>
       <PageHeader title={`Hoş geldiniz, ${manager.fullName ?? 'Yönetici'}`} subtitle={`${manager.siteName} · ${monthLabel}`} />
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-6">
-        <StatCard label="Sakin" value={totalResidents ?? 0} icon="👥" />
-        <StatCard label="Onay Bekleyen" value={pendingApprovals ?? 0} tone={pendingApprovals ? 'warning' : 'default'} icon="✅" />
-        <StatCard label="Bu Ay Ödendi" value={paidThisMonth} tone="success" icon="💰" />
-        <StatCard label="Bu Ay Ödenmedi" value={openThisMonth + partialThisMonth} tone={openThisMonth + partialThisMonth ? 'danger' : 'default'} icon="⏳" />
-        <StatCard label="Toplam Tahsilat" value={tl(totalCollected)} icon="🏦" />
-        <StatCard label="Açık Şikayet" value={openComplaints ?? 0} tone={openComplaints ? 'warning' : 'default'} icon="📣" />
+        <StatCard label="Kasa & Banka" value={tlFmt(totalBalance)} tone={totalBalance < 0 ? 'danger' : 'default'} hint={balanceHint} icon="🏦" href="/cash" />
+        <StatCard label="Bu Ay Tahsilat" value={tlFmt(monthCollected)} tone="success" icon="💰" href="/cash" />
+        <StatCard label="Bu Ay Ödenmedi" value={tlFmt(monthOpenAmount)} hint={monthTotal > 0 ? `${openThisMonth + partialThisMonth} daire` : undefined} tone={monthOpenAmount > 0.005 ? 'danger' : 'default'} icon="⏳" href="/units?f=borclu" />
+        <StatCard label="Bu Ay Ödendi" value={paidThisMonth} hint={monthTotal > 0 ? `${monthTotal} tahakkuktan` : undefined} tone="success" icon="✅" href="/accruals" />
+        <StatCard label="Sakin" value={totalResidents ?? 0} icon="👥" href="/units" />
+        <StatCard label="Açık Şikayet" value={openComplaints ?? 0} tone={openComplaints ? 'warning' : 'default'} icon="📣" href="/complaints" />
       </div>
+
+      {/* Bugün / Dikkat — sahadaki tüm modüllerden tek liste */}
+      {attention.length > 0 && (
+        <div className="mt-6">
+          <Card title="Bugün / Dikkat">
+            <ul className="divide-y divide-slate-50">
+              {attention.map((a, i) => (
+                <li key={i}>
+                  <Link href={a.href} className="flex items-center justify-between gap-3 py-2.5 transition hover:bg-slate-50">
+                    <span className="flex items-center gap-2.5 text-sm text-slate-700">
+                      <span className="text-lg">{a.icon}</span>
+                      {a.text}
+                    </span>
+                    <span className={`text-xs font-semibold ${a.tone === 'red' ? 'text-red-600' : a.tone === 'amber' ? 'text-amber-600' : 'text-blue-600'}`}>Git →</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        </div>
+      )}
 
       {/* Grafikler — sayfa her açılışta canlı DB'den hesaplanır (force-dynamic) */}
       <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-4">
@@ -149,7 +192,7 @@ export default async function DashboardPage() {
             { label: '31–90 gün', value: aging.mid, color: '#2a78d6' },
             { label: '90+ gün', value: aging.old, color: '#104281' },
           ]}
-          centerValue={tl(totalOpenDebt)}
+          centerValue={tlFmt(totalOpenDebt)}
           centerLabel="açık anapara"
           emptyText="Açık borç yok 🎉"
           unit="tl"
@@ -191,6 +234,10 @@ export default async function DashboardPage() {
       </div>
     </>
   );
+}
+
+function tlFmt(v: number) {
+  return `₺${Math.round(v).toLocaleString('tr-TR')}`;
 }
 
 function QuickLink({ href, icon, label }: { href: string; icon: string; label: string }) {

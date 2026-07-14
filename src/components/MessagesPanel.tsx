@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { supabaseBrowser } from '@/lib/supabaseBrowser';
 import { Card, EmptyState } from '@/components/ui';
 import { inputCls } from '@/components/UnitsPanel';
@@ -37,18 +37,41 @@ export function MessagesPanel({ threads: initial }: { threads: DmThread[] }) {
   const [err, setErr] = useState('');
 
   const activeThread = threads.find((t) => t.resident_user_id === active) ?? null;
+  const activeRef = useRef<string | null>(null);
 
   async function reloadThreads() {
     const { data } = await supabaseBrowser().rpc('get_dm_threads');
     setThreads((data ?? []) as unknown as DmThread[]);
+    return (data ?? []) as unknown as DmThread[];
   }
 
   async function openThread(id: string) {
-    setActive(id); setErr('');
+    setActive(id); activeRef.current = id; setErr('');
     const { data } = await supabaseBrowser().rpc('get_dm_thread', { p_resident_user_id: id });
     setMessages((data ?? []) as unknown as DmMessage[]);
     await reloadThreads(); // okundu sayaçları güncellensin
   }
+
+  // Yeni mesajlar elle yenilemeden düşsün: 20 sn'de bir + sekme öne gelince tazele.
+  useEffect(() => {
+    let alive = true;
+    async function tick() {
+      if (!alive || document.hidden) return;
+      const list = await reloadThreads();
+      const cur = activeRef.current;
+      // Açık konuşmaya yeni mesaj geldiyse mesajları da çek (ekranda açık → okundu sayılır)
+      if (cur && list.some((t) => t.resident_user_id === cur && t.unread > 0)) {
+        const { data } = await supabaseBrowser().rpc('get_dm_thread', { p_resident_user_id: cur });
+        if (alive && activeRef.current === cur) setMessages((data ?? []) as unknown as DmMessage[]);
+        await reloadThreads();
+      }
+    }
+    const id = setInterval(tick, 20_000);
+    const onVisible = () => { if (!document.hidden) tick(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => { alive = false; clearInterval(id); document.removeEventListener('visibilitychange', onVisible); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function sendReply() {
     if (!active || !reply.trim()) return;

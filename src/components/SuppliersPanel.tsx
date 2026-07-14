@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { supabaseBrowser } from '@/lib/supabaseBrowser';
 import { Card, EmptyState, Table, Th, Td, Badge, StatCard } from '@/components/ui';
 import { Modal, Field, inputCls } from '@/components/UnitsPanel';
+import { PhoneLink } from '@/components/PhoneLink';
 import { useReadOnly } from '@/components/ReadOnly';
 import { money, date } from '@/lib/format';
 import { friendlyDbMessage } from '@/lib/error';
@@ -23,6 +24,7 @@ export type QueueItem = {
   id: string; supplier_name: string; iban: string | null; invoice_no: string | null;
   due_date: string | null; amount: number; description: string | null; overdue: boolean;
 };
+export type AccountOption = { id: string; ad: string; tur: string };
 
 const SUP_CATS: { key: string; label: string }[] = [
   { key: 'asansor', label: 'Asansör' }, { key: 'temizlik', label: 'Temizlik' }, { key: 'guvenlik', label: 'Güvenlik' },
@@ -48,8 +50,8 @@ const EMPTY_SUP: SupForm = { id: null, name: '', category: 'diger', vkn: '', pho
 type InvForm = { id: string | null; supplier_id: string; amount: string; invoice_no: string; invoice_date: string; due_date: string; description: string };
 const EMPTY_INV: InvForm = { id: null, supplier_id: '', amount: '', invoice_no: '', invoice_date: '', due_date: '', description: '' };
 
-export function SuppliersPanel({ canApprove, suppliers: initSup, invoices: initInv, queue: initQ }: {
-  canApprove: boolean; suppliers: Supplier[]; invoices: Invoice[]; queue: QueueItem[];
+export function SuppliersPanel({ canApprove, suppliers: initSup, invoices: initInv, queue: initQ, accounts = [] }: {
+  canApprove: boolean; suppliers: Supplier[]; invoices: Invoice[]; queue: QueueItem[]; accounts?: AccountOption[];
 }) {
   const router = useRouter();
   const ro = useReadOnly();
@@ -136,8 +138,41 @@ export function SuppliersPanel({ canApprove, suppliers: initSup, invoices: initI
     await reloadAll(); router.refresh();
   }
   async function approve(i: Invoice) { if (confirm(`${i.supplier_name} — ${money(Number(i.amount), true)} faturası onaylansın mı?`)) await act('approve_invoice', i.id); }
-  async function reject(i: Invoice) { const r = prompt('Ret nedeni (opsiyonel):') ?? undefined; await act('reject_invoice', i.id, { p_reason: r || undefined }); }
-  async function pay(i: Invoice) { if (confirm(`${i.supplier_name} — ${money(Number(i.amount), true)} ödendi olarak işaretlensin mi?`)) await act('mark_invoice_paid', i.id, { p_paid_date: undefined }); }
+
+  // Ret modalı (rapor #33: çıplak prompt() yerine)
+  const [rejectTarget, setRejectTarget] = useState<Invoice | null>(null);
+  const [rejectReason, setRejectReason] = useState('');
+  async function submitReject() {
+    if (!rejectTarget) return;
+    await act('reject_invoice', rejectTarget.id, { p_reason: rejectReason.trim() || undefined });
+    setRejectTarget(null); setRejectReason('');
+  }
+
+  // Ödeme modalı: ödendi işaretle + opsiyonel kasadan düş (tek işlem, çift kayıt yok)
+  const [payTarget, setPayTarget] = useState<{ id: string; label: string; amount: number } | null>(null);
+  const [payDate, setPayDate] = useState('');
+  const [payAccount, setPayAccount] = useState('');
+  const [payErr, setPayErr] = useState('');
+
+  function openPay(id: string, label: string, amount: number) {
+    setPayTarget({ id, label, amount });
+    setPayDate(new Date().toISOString().slice(0, 10));
+    setPayAccount(accounts[0]?.id ?? '');
+    setPayErr('');
+  }
+  async function confirmPay() {
+    if (!payTarget) return;
+    setBusy(true); setPayErr('');
+    const { error } = await supabaseBrowser().rpc('mark_invoice_paid', {
+      p_id: payTarget.id,
+      p_paid_date: payDate || undefined,
+      p_cash_account_id: payAccount || undefined,
+    });
+    setBusy(false);
+    if (error) { setPayErr(friendlyDbMessage(error.message)); return; }
+    setPayTarget(null);
+    await reloadAll(); router.refresh();
+  }
 
   const filteredInv = statusFilter ? invoices.filter((i) => i.status === statusFilter) : invoices;
   const queueTotal = queue.reduce((a, q) => a + Number(q.amount), 0);
@@ -166,7 +201,7 @@ export function SuppliersPanel({ canApprove, suppliers: initSup, invoices: initI
                     <Td>{q.due_date ? <span className={q.overdue ? 'font-medium text-red-600' : 'text-slate-500'}>{date(q.due_date)}{q.overdue ? ' (geçti)' : ''}</span> : '—'}</Td>
                     <Td className="text-right tabular-nums font-medium">{money(Number(q.amount), true)}</Td>
                     <Td className="text-xs text-slate-400">{q.iban ?? '—'}</Td>
-                    {!ro && <Td className="text-right"><button onClick={() => act('mark_invoice_paid', q.id, { p_paid_date: undefined })} disabled={busy} className="text-xs font-medium text-green-600 hover:underline disabled:opacity-50">Ödendi</button></Td>}
+                    {!ro && <Td className="text-right"><button onClick={() => openPay(q.id, `${q.supplier_name}${q.invoice_no ? ' · ' + q.invoice_no : ''}`, Number(q.amount))} disabled={busy} className="text-xs font-medium text-green-600 hover:underline disabled:opacity-50">Ödendi</button></Td>}
                   </tr>
                 ))}
               </tbody>
@@ -219,10 +254,10 @@ export function SuppliersPanel({ canApprove, suppliers: initSup, invoices: initI
                               <>
                                 <button onClick={() => openEditInv(i)} className="text-xs text-slate-500 hover:underline">Düzenle</button>
                                 {canApprove && <button onClick={() => approve(i)} disabled={busy} className="ml-3 text-xs font-medium text-blue-600 hover:underline disabled:opacity-50">Onayla</button>}
-                                {canApprove && <button onClick={() => reject(i)} disabled={busy} className="ml-3 text-xs text-red-500 hover:underline disabled:opacity-50">Reddet</button>}
+                                {canApprove && <button onClick={() => { setRejectTarget(i); setRejectReason(''); }} disabled={busy} className="ml-3 text-xs text-red-500 hover:underline disabled:opacity-50">Reddet</button>}
                               </>
                             )}
-                            {i.status === 'approved' && <button onClick={() => pay(i)} disabled={busy} className="text-xs font-medium text-green-600 hover:underline disabled:opacity-50">Ödendi</button>}
+                            {i.status === 'approved' && <button onClick={() => openPay(i.id, `${i.supplier_name}${i.invoice_no ? ' · ' + i.invoice_no : ''}`, Number(i.amount))} disabled={busy} className="text-xs font-medium text-green-600 hover:underline disabled:opacity-50">Ödendi</button>}
                           </Td>
                         )}
                       </tr>
@@ -247,7 +282,10 @@ export function SuppliersPanel({ canApprove, suppliers: initSup, invoices: initI
                     <tr key={s.id}>
                       <Td><span className="font-medium">{s.name}</span>{s.vkn && <p className="text-xs text-slate-400">VKN: {s.vkn}</p>}</Td>
                       <Td className="text-slate-500">{SUP_CAT_LABEL[s.category] ?? s.category}</Td>
-                      <Td className="text-slate-500">{s.contact_person ?? '—'}{s.phone ? ` · ${s.phone}` : ''}</Td>
+                      <Td className="text-slate-500">
+                        {s.contact_person ?? '—'}
+                        {s.phone && <> · <PhoneLink phone={s.phone} /></>}
+                      </Td>
                       <Td className="text-xs text-slate-400">{s.iban ?? '—'}</Td>
                       {!ro && (
                         <Td className="whitespace-nowrap text-right">
@@ -314,6 +352,59 @@ export function SuppliersPanel({ canApprove, suppliers: initSup, invoices: initI
             <div className="flex justify-end gap-2 pt-1">
               <button onClick={() => setInvOpen(false)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50">İptal</button>
               <button onClick={submitInv} disabled={busy} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">{busy ? 'Kaydediliyor…' : 'Kaydet'}</button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Ret modalı */}
+      {rejectTarget && (
+        <Modal title="Faturayı Reddet" onClose={() => setRejectTarget(null)}>
+          <div className="flex flex-col gap-3">
+            <p className="text-sm text-slate-600">
+              <span className="font-semibold">{rejectTarget.supplier_name}</span>
+              {rejectTarget.invoice_no ? ` · ${rejectTarget.invoice_no}` : ''} — {money(Number(rejectTarget.amount), true)} reddedilecek.
+            </p>
+            <Field label="Ret nedeni (opsiyonel — faturada görünür)">
+              <input value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && submitReject()} className={inputCls} placeholder="örn. tutar sözleşmeyle uyuşmuyor" autoFocus />
+            </Field>
+            <div className="flex justify-end gap-2 pt-1">
+              <button onClick={() => setRejectTarget(null)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50">İptal</button>
+              <button onClick={submitReject} disabled={busy} className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50">
+                {busy ? '…' : 'Reddet'}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Ödeme modalı — ödendi + opsiyonel kasadan düşme */}
+      {payTarget && (
+        <Modal title="Fatura Ödemesi" onClose={() => setPayTarget(null)}>
+          <div className="flex flex-col gap-3">
+            <p className="text-sm text-slate-600">
+              <span className="font-semibold">{payTarget.label}</span> — {money(payTarget.amount, true)} ödendi olarak işaretlenecek.
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Ödeme Tarihi">
+                <input type="date" value={payDate} onChange={(e) => setPayDate(e.target.value)} className={inputCls} />
+              </Field>
+              <Field label="Kasadan Düş">
+                <select value={payAccount} onChange={(e) => setPayAccount(e.target.value)} className={inputCls}>
+                  <option value="">Kasaya işleme (yalnız işaretle)</option>
+                  {accounts.map((a) => <option key={a.id} value={a.id}>{a.ad} ({a.tur === 'banka' ? 'Banka' : 'Nakit'})</option>)}
+                </select>
+              </Field>
+            </div>
+            <p className="text-xs text-slate-400">
+              Hesap seçerseniz aynı işlemle kasa defterine "Tedarikçi" gideri yazılır ve faturaya bağlanır — ikinci kez elle girmeyin.
+            </p>
+            {payErr && <p className="text-sm text-red-600">{payErr}</p>}
+            <div className="flex justify-end gap-2 pt-1">
+              <button onClick={() => setPayTarget(null)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50">İptal</button>
+              <button onClick={confirmPay} disabled={busy} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50">
+                {busy ? 'Kaydediliyor…' : 'Ödendi Olarak Kaydet'}
+              </button>
             </div>
           </div>
         </Modal>

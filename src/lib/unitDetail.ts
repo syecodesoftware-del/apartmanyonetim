@@ -11,7 +11,7 @@ export async function getUnitDetailData(unitId: string) {
     .maybeSingle();
   if (!unit) return null;
 
-  const [{ data: tenancies }, { data: balance }, { data: residents }, { data: ledger }] = await Promise.all([
+  const [{ data: tenancies }, { data: balance }, { data: residents }, { data: ledger }, { data: accounts }] = await Promise.all([
     sb
       .from('tenancies')
       .select('id, user_id, relationship, full_name, phone, tc_kimlik, start_date, end_date')
@@ -34,6 +34,12 @@ export async function getUnitDetailData(unitId: string) {
       .select('id, tarih, tur, aciklama, borc, odeme, durum, sirala')
       .eq('unit_id', unitId)
       .order('sirala', { ascending: true }),
+    sb
+      .from('cash_accounts')
+      .select('id, ad, tur')
+      .eq('site_id', unit.site_id)
+      .eq('is_active', true)
+      .order('created_at', { ascending: true }),
   ]);
 
   return {
@@ -45,5 +51,6 @@ export async function getUnitDetailData(unitId: string) {
     kalanGecikme: Number(balance?.kalan_gecikme ?? 0),
     residents: residents ?? [],
     ledger: ledger ?? [],
+    accounts: accounts ?? [],
   };
 }

@@ -5,8 +5,11 @@ import { useRouter } from 'next/navigation';
 import { supabaseBrowser } from '@/lib/supabaseBrowser';
 import { Card, EmptyState, Table, Th, Td, Badge } from '@/components/ui';
 import { Modal, Field, inputCls } from '@/components/UnitsPanel';
+import { PhoneLink } from '@/components/PhoneLink';
+import { type AccountOption } from '@/components/CollectModal';
 import { useReadOnly } from '@/components/ReadOnly';
 import { money, date } from '@/lib/format';
+import { todayLocalISO } from '@/lib/date';
 import { friendlyDbMessage } from '@/lib/error';
 
 export type StaffMember = {
@@ -41,7 +44,7 @@ const EMPTY_FORM: Form = {
   id: null, full_name: '', role: 'kapici', phone: '', id_no: '', start_date: '', end_date: '', monthly_wage: '', active: true, note: '',
 };
 
-export function StaffPanel({ staff: initial }: { staff: StaffMember[] }) {
+export function StaffPanel({ staff: initial, accounts = [] }: { staff: StaffMember[]; accounts?: AccountOption[] }) {
   const router = useRouter();
   const ro = useReadOnly();
   const [staff, setStaff] = useState<StaffMember[]>(initial);
@@ -144,7 +147,7 @@ export function StaffPanel({ staff: initial }: { staff: StaffMember[] }) {
                       {s.note && <p className="text-xs text-slate-400">{s.note}</p>}
                     </Td>
                     <Td className="text-slate-500">{ROLE_LABEL[s.role] ?? s.role}</Td>
-                    <Td className="text-slate-500">{s.phone ?? '—'}</Td>
+                    <Td className="text-slate-500">{s.phone ? <PhoneLink phone={s.phone} /> : '—'}</Td>
                     <Td className="text-slate-400">{s.start_date ? date(s.start_date) : '—'}</Td>
                     <Td className="text-right tabular-nums text-slate-500">{s.monthly_wage != null ? money(Number(s.monthly_wage), true) : '—'}</Td>
                     <Td>{s.active ? <Badge tone="green">Aktif</Badge> : <Badge tone="slate">Ayrıldı</Badge>}</Td>
@@ -161,6 +164,8 @@ export function StaffPanel({ staff: initial }: { staff: StaffMember[] }) {
           </div>
         )}
       </Card>
+
+      <WageQueue accounts={accounts} />
 
       <ShiftSchedule staff={staff} />
 
@@ -202,6 +207,114 @@ export function StaffPanel({ staff: initial }: { staff: StaffMember[] }) {
         </Modal>
       )}
     </div>
+  );
+}
+
+/** Rapor #25: aylık maaşlar bilgi olmaktan çıkar — bu ay ödenen/ödenmeyen çeklist + kasadan tek tık ödeme. */
+type WageRow = {
+  staff_id: string; full_name: string; role: string; monthly_wage: number;
+  paid: boolean; paid_date: string | null; account_name: string | null;
+};
+
+function WageQueue({ accounts }: { accounts: AccountOption[] }) {
+  const router = useRouter();
+  const ro = useReadOnly();
+  const [rows, setRows] = useState<WageRow[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [payTarget, setPayTarget] = useState<WageRow | null>(null);
+  const [payAccount, setPayAccount] = useState('');
+  const [payDate, setPayDate] = useState(todayLocalISO());
+  const [err, setErr] = useState('');
+
+  async function reload() {
+    const { data } = await supabaseBrowser().rpc('get_wage_queue', { p_month: undefined });
+    setRows((data ?? []) as unknown as WageRow[]);
+  }
+  useEffect(() => { reload(); }, []);
+
+  function openPay(r: WageRow) {
+    setPayTarget(r);
+    setPayAccount(accounts[0]?.id ?? '');
+    setPayDate(todayLocalISO());
+    setErr('');
+  }
+
+  async function submitPay() {
+    if (!payTarget) return;
+    if (!payAccount) { setErr('Kasa/banka hesabı seçin.'); return; }
+    setBusy(true); setErr('');
+    const { error } = await supabaseBrowser().rpc('pay_staff_wage', {
+      p_staff_id: payTarget.staff_id,
+      p_cash_account_id: payAccount,
+      p_paid_date: payDate || undefined,
+    });
+    setBusy(false);
+    if (error) { setErr(friendlyDbMessage(error.message)); return; }
+    setPayTarget(null);
+    await reload();
+    router.refresh();
+  }
+
+  if (rows.length === 0) return null;
+  const unpaid = rows.filter((r) => !r.paid);
+  const monthLabel = new Date().toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' });
+
+  return (
+    <Card
+      title={`Maaş Kuyruğu — ${monthLabel}`}
+      action={unpaid.length > 0
+        ? <Badge tone="amber">{unpaid.length} maaş bekliyor</Badge>
+        : <Badge tone="green">Tümü ödendi ✓</Badge>}
+    >
+      <div className="flex flex-col divide-y divide-slate-50">
+        {rows.map((r) => (
+          <div key={r.staff_id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-slate-800">{r.full_name}</p>
+              <p className="text-xs text-slate-400">{ROLE_LABEL[r.role] ?? r.role} · {money(Number(r.monthly_wage), true)}</p>
+            </div>
+            {r.paid ? (
+              <span className="text-xs text-emerald-600">
+                ✓ Ödendi{r.paid_date ? ` · ${date(r.paid_date)}` : ''}{r.account_name ? ` · ${r.account_name}` : ''}
+              </span>
+            ) : !ro ? (
+              <button onClick={() => openPay(r)} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700">
+                Maaşı Öde
+              </button>
+            ) : (
+              <Badge tone="amber">Bekliyor</Badge>
+            )}
+          </div>
+        ))}
+      </div>
+      <p className="mt-2 text-xs text-slate-400">Ödeme, seçtiğiniz hesaptan "Maaş" kategorili gider olarak düşülür; aynı ay ikinci kez ödenemez.</p>
+
+      {payTarget && (
+        <Modal title={`Maaş Ödemesi — ${payTarget.full_name}`} onClose={() => setPayTarget(null)}>
+          <div className="flex flex-col gap-3">
+            <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700">
+              {monthLabel} maaşı: <span className="font-bold">{money(Number(payTarget.monthly_wage), true)}</span>
+            </p>
+            <Field label="Kasadan Düş *">
+              <select value={payAccount} onChange={(e) => setPayAccount(e.target.value)} className={inputCls}>
+                {accounts.length === 0 && <option value="">Aktif hesap yok — önce Kasa & Banka'dan hesap açın</option>}
+                {accounts.map((a) => <option key={a.id} value={a.id}>{a.ad} ({a.tur === 'nakit' ? 'Nakit' : 'Banka'})</option>)}
+              </select>
+            </Field>
+            <Field label="Ödeme Tarihi">
+              <input type="date" value={payDate} max={todayLocalISO()} onChange={(e) => setPayDate(e.target.value)} className={inputCls} />
+            </Field>
+            {err && <p className="text-sm text-red-600">{err}</p>}
+            <div className="flex justify-end gap-2 pt-1">
+              <button onClick={() => setPayTarget(null)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50">İptal</button>
+              <button onClick={submitPay} disabled={busy || !payAccount} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50">
+                {busy ? 'Ödeniyor…' : 'Öde ve Gidere İşle'}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </Card>
   );
 }
 

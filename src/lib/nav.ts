@@ -25,7 +25,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/enforcement', label: 'Takip & İcra', icon: '⚖️', match: ['/enforcement'] },
   {
     href: '/reports', label: 'Raporlar & Defterler', icon: '📈',
-    match: ['/reports', '/ledger', '/budget', '/documents'],
+    match: ['/reports', '/ledger', '/budget', '/documents', '/activity'],
   },
   {
     href: '/announcements', label: 'İletişim', icon: '📣',

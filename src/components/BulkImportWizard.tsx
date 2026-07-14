@@ -18,6 +18,9 @@ type ImportResult = {
   inserted_units: number;
   inserted_residents: number;
   inserted_blocks: number;
+  updated_units?: number;
+  updated_residents?: number;
+  tenant_changes?: number;
   skipped: { block: string | null; apartment_number: string }[];
   total_rows: number;
 };
@@ -30,6 +33,8 @@ export function BulkImportWizard({ existing }: { existing: ExistingUnit[] }) {
   const nextKey = useRef(1_000_000); // Excel'den gelen key'lerle çakışmasın
   const [rows, setRows] = useState<ImportRow[] | null>(null);
   const [onlyErrors, setOnlyErrors] = useState(false);
+  // Rapor #31: yıllık kiracı değişim dalgası — mevcut daireleri de güncelle
+  const [updateExisting, setUpdateExisting] = useState(false);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -46,7 +51,7 @@ export function BulkImportWizard({ existing }: { existing: ExistingUnit[] }) {
 
   const errorCount = validated?.filter((r) => r.errors.length > 0).length ?? 0;
   const existsCount = validated?.filter((r) => r.errors.length === 0 && r.exists).length ?? 0;
-  const importable = validated ? validated.length - errorCount - existsCount : 0;
+  const importable = validated ? validated.length - errorCount - (updateExisting ? 0 : existsCount) : 0;
   const kiraciCount = validated?.filter((r) => r.errors.length === 0 && !r.exists && r.kiraci_name.trim()).length ?? 0;
 
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -83,6 +88,7 @@ export function BulkImportWizard({ existing }: { existing: ExistingUnit[] }) {
     const payload = toRpcRows(validated);
     const { data, error: rpcErr } = await supabaseBrowser().rpc('bulk_import_units_residents', {
       p_rows: payload as unknown as never,
+      p_update_existing: updateExisting,
     });
     setBusy(false);
     if (rpcErr) { setError('İçe aktarma başarısız (hiçbir kayıt yazılmadı): ' + rpcErr.message); return; }
@@ -129,6 +135,12 @@ export function BulkImportWizard({ existing }: { existing: ExistingUnit[] }) {
           <p className="mt-1">
             <b>{result.inserted_units}</b> daire ve <b>{result.inserted_residents}</b> sakin kaydı
             {result.inserted_blocks > 0 && <> (+<b>{result.inserted_blocks}</b> yeni blok)</>} oluşturuldu.
+            {((result.updated_units ?? 0) > 0 || (result.updated_residents ?? 0) > 0) && (
+              <> <b>{result.updated_units ?? 0}</b> dairede eksik bilgi, <b>{result.updated_residents ?? 0}</b> kişide telefon/TC tamamlandı.</>
+            )}
+            {(result.tenant_changes ?? 0) > 0 && (
+              <> <b>{result.tenant_changes}</b> dairede kiracı değişimi işlendi (eski kiracılık bugünle kapatıldı).</>
+            )}
             {result.skipped.length > 0 && (
               <> <b>{result.skipped.length}</b> daire zaten kayıtlı olduğu için atlandı
                 ({result.skipped.map((x) => [x.block, x.apartment_number].filter(Boolean).join('/')).join(', ')}).</>
@@ -151,7 +163,11 @@ export function BulkImportWizard({ existing }: { existing: ExistingUnit[] }) {
             <div className="flex flex-wrap items-center gap-2 text-xs">
               <Badge tone="blue">{validated.length} satır</Badge>
               <Badge tone="green">{importable} aktarılacak · {kiraciCount} kiracılı</Badge>
-              {existsCount > 0 && <Badge tone="amber">{existsCount} mevcut — atlanacak</Badge>}
+              {existsCount > 0 && (
+                updateExisting
+                  ? <Badge tone="blue">{existsCount} mevcut — güncellenecek</Badge>
+                  : <Badge tone="amber">{existsCount} mevcut — atlanacak</Badge>
+              )}
               {errorCount > 0 ? <Badge tone="red">{errorCount} hatalı satır</Badge> : <Badge tone="green">Doğrulama temiz ✓</Badge>}
             </div>
           </header>
@@ -161,6 +177,10 @@ export function BulkImportWizard({ existing }: { existing: ExistingUnit[] }) {
               <label className="flex cursor-pointer items-center gap-1.5 text-sm text-slate-600">
                 <input type="checkbox" checked={onlyErrors} onChange={(e) => setOnlyErrors(e.target.checked)} />
                 Sadece hatalı satırları göster
+              </label>
+              <label className="flex cursor-pointer items-center gap-1.5 text-sm text-slate-600" title="Mevcut dairelerde boş kat/arsa payı/m² ve kişilerde boş telefon/TC tamamlanır; kiracı adı değiştiyse eski kiracılık kapatılıp yenisi açılır. Dolu alanların üzerine yazılmaz.">
+                <input type="checkbox" checked={updateExisting} onChange={(e) => setUpdateExisting(e.target.checked)} />
+                🔄 Mevcut daireleri de güncelle (tel/TC tamamla + kiracı değişimi)
               </label>
               <button onClick={addRow} className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100">＋ Satır Ekle</button>
             </div>

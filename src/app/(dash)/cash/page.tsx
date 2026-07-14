@@ -11,7 +11,7 @@ export default async function CashPage() {
 
   const [balRes, movRes] = await Promise.all([
     sb.from('cash_account_balances').select('cash_account_id, ad, tur, is_active, balance').eq('site_id', manager.siteId).order('ad'),
-    sb.from('cash_movements').select('id, cash_account_id, yon, amount, hareket_tarihi, tur, detay').eq('site_id', manager.siteId).order('sirala', { ascending: false }).limit(100),
+    sb.from('cash_movements').select('id, cash_account_id, yon, amount, hareket_tarihi, tur, detay, kaynak').eq('site_id', manager.siteId).order('sirala', { ascending: false }).limit(100),
   ]);
 
   const balances = (balRes.data ?? []) as AccountBalance[];

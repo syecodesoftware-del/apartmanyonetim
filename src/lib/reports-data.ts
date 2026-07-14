@@ -12,7 +12,7 @@ import { date } from './format';
  * diğeri de güncellenmeli.
  */
 
-export type ReportKey = 'income-expense' | 'collections' | 'aging' | 'cash' | 'collection-rate';
+export type ReportKey = 'income-expense' | 'collections' | 'aging' | 'cash' | 'collection-rate' | 'dues-grid';
 export type Range = { from: string; to: string };
 
 type SB = Awaited<ReturnType<typeof supabaseServer>>;
@@ -246,6 +246,68 @@ async function collectionRate(sb: SB, siteId: string): Promise<ExportSheet[]> {
   ];
 }
 
+type GridAcc = { unit_id: string; period_month: number; status: string; amount: number | null; principal_remaining: number | null };
+const AY_KISA = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'];
+
+/** Klasik "aidat çizelgesi": satır=daire, sütun=12 ay. Yıl, seçilen başlangıç tarihinden alınır.
+ *  Hücre: ✓ ödendi · ◐ kısmi (kalan ₺) · ✗ açık (kalan ₺) · V vazgeçildi · — tahakkuk yok. */
+async function duesGrid(sb: SB, siteId: string, r: Range): Promise<ExportSheet[]> {
+  const year = Number(r.from.slice(0, 4));
+  const [{ data: units }, { data: accruals }] = await Promise.all([
+    sb.from('units').select('id, block, apartment_number').eq('site_id', siteId)
+      .order('block', { ascending: true }).order('apartment_number', { ascending: true }),
+    sb.from('accruals').select('unit_id, period_month, status, amount, principal_remaining')
+      .eq('site_id', siteId).eq('period_year', year).not('period_month', 'is', null).limit(20000),
+  ]);
+
+  type Cell = { total: number; remaining: number; waivedOnly: boolean; any: boolean };
+  const grid = new Map<string, Cell[]>();
+  const cellOf = (unitId: string, m: number): Cell => {
+    let arr = grid.get(unitId);
+    if (!arr) { arr = Array.from({ length: 12 }, () => ({ total: 0, remaining: 0, waivedOnly: true, any: false })); grid.set(unitId, arr); }
+    return arr[m - 1];
+  };
+  for (const a of (accruals ?? []) as GridAcc[]) {
+    if (!a.period_month || a.period_month < 1 || a.period_month > 12) continue;
+    const c = cellOf(a.unit_id, a.period_month);
+    c.any = true;
+    if (a.status === 'waived') continue;
+    c.waivedOnly = false;
+    c.total += Number(a.amount ?? 0);
+    if (a.status === 'open' || a.status === 'partial') c.remaining += Number(a.principal_remaining ?? 0);
+  }
+
+  const fmt = (v: number) => Math.round(v).toLocaleString('tr-TR');
+  const rows = (units ?? []).map((u) => {
+    const cells = grid.get(u.id);
+    const row: Record<string, unknown> = { 'Daire': [u.block, u.apartment_number].filter(Boolean).join(' / ') || '—' };
+    let openTotal = 0;
+    for (let m = 1; m <= 12; m++) {
+      const c = cells?.[m - 1];
+      let text = '—';
+      if (c?.any) {
+        if (c.waivedOnly) text = 'V';
+        else if (c.remaining <= 0.005) text = '✓';
+        else { text = `${c.remaining < c.total - 0.005 ? '◐' : '✗'} ${fmt(c.remaining)}`; openTotal += c.remaining; }
+      }
+      row[AY_KISA[m - 1]] = text;
+    }
+    row['Açık Toplam'] = Math.round(openTotal * 100) / 100;
+    return row;
+  });
+
+  return [
+    { name: `Aidat Çizelgesi ${year}`, rows },
+    { name: 'Açıklama', rows: [
+      { 'İşaret': '✓', 'Anlamı': 'Ödendi' },
+      { 'İşaret': '◐ tutar', 'Anlamı': 'Kısmi ödendi — kalan tutar' },
+      { 'İşaret': '✗ tutar', 'Anlamı': 'Ödenmedi — kalan tutar' },
+      { 'İşaret': 'V', 'Anlamı': 'Vazgeçildi' },
+      { 'İşaret': '—', 'Anlamı': 'O ay tahakkuk yok' },
+    ] },
+  ];
+}
+
 export async function buildReportSheets(sb: SB, siteId: string, key: ReportKey, range: Range): Promise<ExportSheet[]> {
   switch (key) {
     case 'income-expense': return incomeExpense(sb, siteId, range);
@@ -253,6 +315,7 @@ export async function buildReportSheets(sb: SB, siteId: string, key: ReportKey, 
     case 'aging': return aging(sb, siteId);
     case 'cash': return cash(sb, siteId, range);
     case 'collection-rate': return collectionRate(sb, siteId);
+    case 'dues-grid': return duesGrid(sb, siteId, range);
     default: return [];
   }
 }

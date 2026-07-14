@@ -12,22 +12,32 @@ export function PageHeader({ title, subtitle, action }: { title: string; subtitl
   );
 }
 
-export function StatCard({ label, value, hint, tone, icon }: {
+export function StatCard({ label, value, hint, tone, icon, href }: {
   label: string; value: string | number; hint?: string;
   tone?: 'default' | 'danger' | 'warning' | 'success'; icon?: string;
+  /** Verilirse kart tıklanabilir olur ve ilgili filtreli listeye götürür. */
+  href?: string;
 }) {
   const toneClass =
     tone === 'danger' ? 'text-red-600' : tone === 'warning' ? 'text-amber-600' : tone === 'success' ? 'text-emerald-600' : 'text-slate-900';
-  return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4">
+  const inner = (
+    <>
       <div className="flex items-center justify-between">
         <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</p>
         {icon && <span className="text-base opacity-70">{icon}</span>}
       </div>
       <p className={`mt-1 text-2xl font-bold ${toneClass}`}>{value}</p>
       {hint && <p className="mt-0.5 text-xs text-slate-400">{hint}</p>}
-    </div>
+    </>
   );
+  if (href) {
+    return (
+      <Link href={href} className="block rounded-xl border border-slate-200 bg-white p-4 transition hover:border-blue-300 hover:shadow-sm">
+        {inner}
+      </Link>
+    );
+  }
+  return <div className="rounded-xl border border-slate-200 bg-white p-4">{inner}</div>;
 }
 
 export function Card({ title, action, children, className = '' }: { title?: string; action?: React.ReactNode; children: React.ReactNode; className?: string }) {

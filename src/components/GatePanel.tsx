@@ -33,8 +33,11 @@ const PKG_STATUS: Record<string, { label: string; tone: 'amber' | 'green' | 'sla
   iade: { label: 'İade', tone: 'slate' },
 };
 
-export function GatePanel({ visitors: initV, packages: initP, units }: {
+export type SiteUserRow = { id: string; full_name: string; role: string; block: string | null; apartment_number: string | null };
+
+export function GatePanel({ visitors: initV, packages: initP, units, siteUsers = [], canManageGate = false }: {
   visitors: VisitorPass[]; packages: PackageRow[]; units: UnitRow[];
+  siteUsers?: SiteUserRow[]; canManageGate?: boolean;
 }) {
   const router = useRouter();
   const ro = useReadOnly();
@@ -107,12 +110,20 @@ export function GatePanel({ visitors: initV, packages: initP, units }: {
     router.refresh();
   }
 
-  async function deliverPackage(p: PackageRow) {
-    const note = prompt('Teslim notu (kim aldı, opsiyonel):') ?? undefined;
-    setBusy(true);
-    const { error } = await supabaseBrowser().rpc('mark_package_delivered', { p_id: p.id, p_note: note || undefined });
+  // Teslim modalı (rapor #33: çıplak prompt() yerine)
+  const [deliverTarget, setDeliverTarget] = useState<PackageRow | null>(null);
+  const [deliverNote, setDeliverNote] = useState('');
+  const [deliverErr, setDeliverErr] = useState('');
+
+  async function submitDeliver() {
+    if (!deliverTarget) return;
+    setBusy(true); setDeliverErr('');
+    const { error } = await supabaseBrowser().rpc('mark_package_delivered', {
+      p_id: deliverTarget.id, p_note: deliverNote.trim() || undefined,
+    });
     setBusy(false);
-    if (error) { alert('İşlem başarısız: ' + friendlyDbMessage(error.message)); return; }
+    if (error) { setDeliverErr(friendlyDbMessage(error.message)); return; }
+    setDeliverTarget(null); setDeliverNote('');
     await reloadPackages();
     router.refresh();
   }
@@ -241,7 +252,7 @@ export function GatePanel({ visitors: initV, packages: initP, units }: {
                         {!ro && (
                           <Td className="text-right">
                             {p.status === 'teslim_alindi' && (
-                              <button onClick={() => deliverPackage(p)} disabled={busy} className="text-xs font-medium text-green-600 hover:underline disabled:opacity-50">
+                              <button onClick={() => { setDeliverTarget(p); setDeliverNote(''); setDeliverErr(''); }} disabled={busy} className="text-xs font-medium text-green-600 hover:underline disabled:opacity-50">
                                 Teslim Et
                               </button>
                             )}
@@ -255,6 +266,28 @@ export function GatePanel({ visitors: initV, packages: initP, units }: {
             )}
           </Card>
         </>
+      )}
+
+      {canManageGate && <GateStaffCard siteUsers={siteUsers} />}
+
+      {deliverTarget && (
+        <Modal title={`Kargo Teslimi — ${deliverTarget.unit_label}`} onClose={() => setDeliverTarget(null)}>
+          <div className="flex flex-col gap-3">
+            <p className="text-sm text-slate-600">
+              {deliverTarget.carrier ?? 'Kargo'}{deliverTarget.description ? ` · ${deliverTarget.description}` : ''} sakine teslim edilecek.
+            </p>
+            <Field label="Teslim notu (kim aldı, opsiyonel)">
+              <input value={deliverNote} onChange={(e) => setDeliverNote(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && submitDeliver()} className={inputCls} placeholder="örn. eşi teslim aldı" autoFocus />
+            </Field>
+            {deliverErr && <p className="text-sm text-red-600">{deliverErr}</p>}
+            <div className="flex justify-end gap-2 pt-1">
+              <button onClick={() => setDeliverTarget(null)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50">İptal</button>
+              <button onClick={submitDeliver} disabled={busy} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50">
+                {busy ? '…' : 'Teslim Edildi'}
+              </button>
+            </div>
+          </div>
+        </Modal>
       )}
 
       {pkgOpen && (
@@ -282,6 +315,67 @@ export function GatePanel({ visitors: initV, packages: initP, units }: {
         </Modal>
       )}
     </div>
+  );
+}
+
+/** Rapor #32: görevli rolü gelene kadar pratik ara çözüm — kapıcı/güvenliğe "yalnız Kapı ekranı"
+ *  yetkili kısıtlı hesap. Sakin hesabı görevliye çevrilir; görevli panele girince yalnız bu ekranı görür. */
+function GateStaffCard({ siteUsers }: { siteUsers: SiteUserRow[] }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [selected, setSelected] = useState('');
+  const [err, setErr] = useState('');
+  const [users, setUsers] = useState<SiteUserRow[]>(siteUsers);
+
+  const gorevliler = users.filter((u) => u.role === 'gorevli');
+  const residents = users.filter((u) => u.role === 'resident');
+
+  async function setRole(userId: string, enable: boolean) {
+    if (!enable && !confirm('Görevli yetkisi kaldırılsın mı? Hesap tekrar sakin olur.')) return;
+    setBusy(true); setErr('');
+    const { error } = await supabaseBrowser().rpc('set_gate_role', { p_user_id: userId, p_enable: enable });
+    setBusy(false);
+    if (error) { setErr(friendlyDbMessage(error.message)); return; }
+    setUsers((list) => list.map((u) => (u.id === userId ? { ...u, role: enable ? 'gorevli' : 'resident' } : u)));
+    setSelected('');
+    router.refresh();
+  }
+
+  return (
+    <Card title="🔑 Görevli Hesabı (yalnız bu ekran)">
+      <p className="mb-3 text-xs text-slate-500">
+        Kapıcı / güvenlik görevlisine kısıtlı panel erişimi verin: görevli hesabı yalnız Kapı & Ziyaretçi ekranını görür —
+        kod doğrular, plaka sorgular, kargo kaydeder. Finans, mesaj ve diğer modüllere erişemez.
+        Kişinin önce uygulamaya sakin olarak kayıt olup onaylanması gerekir.
+      </p>
+      {gorevliler.length > 0 && (
+        <div className="mb-3 flex flex-col gap-1.5">
+          {gorevliler.map((u) => (
+            <div key={u.id} className="flex items-center justify-between rounded-lg bg-blue-50 px-3 py-2">
+              <span className="text-sm font-medium text-slate-800">🔑 {u.full_name}</span>
+              <button onClick={() => setRole(u.id, false)} disabled={busy} className="text-xs font-semibold text-red-600 hover:underline disabled:opacity-50">
+                Yetkiyi Kaldır
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="flex flex-wrap items-center gap-2">
+        <select value={selected} onChange={(e) => setSelected(e.target.value)} className={`${inputCls} max-w-72`}>
+          <option value="">— Onaylı hesap seçin —</option>
+          {residents.map((u) => (
+            <option key={u.id} value={u.id}>
+              {u.full_name}{u.block || u.apartment_number ? ` (${[u.block, u.apartment_number].filter(Boolean).join(' / ')})` : ''}
+            </option>
+          ))}
+        </select>
+        <button onClick={() => selected && setRole(selected, true)} disabled={busy || !selected}
+          className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+          Görevli Yap
+        </button>
+      </div>
+      {err && <p className="mt-2 text-sm text-red-600">{err}</p>}
+    </Card>
   );
 }
 

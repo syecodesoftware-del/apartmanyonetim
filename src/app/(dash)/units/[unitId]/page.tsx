@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function UnitDetailPage({ params }: { params: Promise<{ unitId: string }> }) {
   const { unitId } = await params;
-  await requireManager();
+  const manager = await requireManager();
 
   const data = await getUnitDetailData(unitId);
   if (!data) notFound();
@@ -38,6 +38,8 @@ export default async function UnitDetailPage({ params }: { params: Promise<{ uni
         kalanGecikme={data.kalanGecikme}
         ledger={data.ledger}
         residents={data.residents}
+        accounts={data.accounts}
+        siteName={manager.siteName}
       />
     </>
   );

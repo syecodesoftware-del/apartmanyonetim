@@ -1,17 +1,21 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabaseBrowser } from '@/lib/supabaseBrowser';
-import { Card, Table, Th, Td, EmptyState, Badge } from '@/components/ui';
+import { Card, Table, Th, Td, EmptyState } from '@/components/ui';
 import { Modal, Field, inputCls } from '@/components/UnitsPanel';
-import { Segmented } from '@/components/controls';
+import { CollectModal, type AccountOption } from '@/components/CollectModal';
+import { PhoneLink } from '@/components/PhoneLink';
 import { useReadOnly } from '@/components/ReadOnly';
+// (tahsilat formu CollectModal'a taşındı)
 import { money } from '@/lib/format';
-import { parseTrDecimal, parseTrAmount, sanitizeAmountInput } from '@/lib/amount';
+import { parseTrDecimal, sanitizeAmountInput } from '@/lib/amount';
 import { todayLocalISO } from '@/lib/date';
 import { friendlyDbMessage } from '@/lib/error';
+
+export type { AccountOption } from '@/components/CollectModal';
 
 /** Daire 360 — Sakinler + Borç & Tahsilat + Ödemeyenler tek tabloda.
  *  Satıra tıklayınca daire detayı popup açılır (intercepting route). */
@@ -53,16 +57,39 @@ function OccupantCell({ o }: { o: Occupant | null }) {
           className={`inline-block h-2 w-2 shrink-0 rounded-full ${o.has_account ? 'bg-emerald-500' : 'bg-slate-300'}`}
         />
       </p>
-      <p className="truncate text-xs text-slate-400">{o.phone ?? ''}</p>
+      {o.phone ? <PhoneLink phone={o.phone} className="truncate" /> : null}
     </div>
   );
 }
 
-export function UnitsHub({ rows, blockOptions, siteId, initialFilter }: {
+type SortKey = 'daire' | 'malik' | 'kiraci' | 'borc';
+
+function SortTh({ label, k, sort, onSort, className = '' }: {
+  label: string; k: SortKey;
+  sort: { key: SortKey; dir: 1 | -1 };
+  onSort: (k: SortKey) => void;
+  className?: string;
+}) {
+  const active = sort.key === k;
+  return (
+    <Th className={className}>
+      <button onClick={() => onSort(k)} className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wide hover:text-slate-800" title="Sırala">
+        {label}
+        <span className={active ? 'text-blue-600' : 'text-slate-300'}>{active ? (sort.dir === 1 ? '▲' : '▼') : '↕'}</span>
+      </button>
+    </Th>
+  );
+}
+
+const PAGE_SIZE = 50;
+
+export function UnitsHub({ rows, blockOptions, siteId, siteName = '', initialFilter, accounts = [] }: {
   rows: HubRow[];
   blockOptions: BlockOption[];
   siteId: string;
+  siteName?: string;
   initialFilter?: string;
+  accounts?: AccountOption[];
 }) {
   const router = useRouter();
   const ro = useReadOnly();
@@ -82,13 +109,8 @@ export function UnitsHub({ rows, blockOptions, siteId, initialFilter }: {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
-  // Tahsilat modalı
+  // Tahsilat modalı (ortak CollectModal)
   const [target, setTarget] = useState<HubRow | null>(null);
-  const [amount, setAmount] = useState('');
-  // 'bank' — collections_method_check yalnız cash/bank/online/qr kabul eder
-  const [method, setMethod] = useState<'cash' | 'bank'>('cash');
-  const [collecting, setCollecting] = useState(false);
-  const [collectError, setCollectError] = useState('');
 
   // Gecikme hesaplama
   const [asOf, setAsOf] = useState(todayLocalISO());
@@ -98,6 +120,13 @@ export function UnitsHub({ rows, blockOptions, siteId, initialFilter }: {
     () => [...new Set(rows.map((r) => r.block).filter((b): b is string => !!b))].sort((a, b) => a.localeCompare(b, 'tr')),
     [rows],
   );
+
+  // Sıralama + sayfalama (500-1000 daire hedefi: tek sayfada tüm liste akmasın)
+  const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: 'daire', dir: 1 });
+  const [page, setPage] = useState(0);
+  function toggleSort(k: SortKey) {
+    setSort((s) => (s.key === k ? { key: k, dir: s.dir === 1 ? -1 : 1 } : { key: k, dir: k === 'borc' ? -1 : 1 }));
+  }
 
   const term = q.trim().toLocaleLowerCase('tr');
   const filtered = useMemo(() => {
@@ -119,6 +148,29 @@ export function UnitsHub({ rows, blockOptions, siteId, initialFilter }: {
       return true;
     });
   }, [rows, filter, blockFilter, term]);
+
+  const sorted = useMemo(() => {
+    const cmpUnit = (a: HubRow, b: HubRow) =>
+      (a.block ?? '').localeCompare(b.block ?? '', 'tr') ||
+      a.apartment_number.localeCompare(b.apartment_number, 'tr', { numeric: true });
+    const cmpName = (a: Occupant | null, b: Occupant | null) =>
+      (a?.full_name ?? ' züüü').localeCompare(b?.full_name ?? ' züüü', 'tr'); // boşlar sona
+    const arr = [...filtered];
+    arr.sort((a, b) => {
+      const base =
+        sort.key === 'borc' ? a.net_borc - b.net_borc :
+        sort.key === 'malik' ? cmpName(a.malik, b.malik) :
+        sort.key === 'kiraci' ? cmpName(a.kiraci, b.kiraci) :
+        cmpUnit(a, b);
+      return base * sort.dir || cmpUnit(a, b);
+    });
+    return arr;
+  }, [filtered, sort]);
+
+  const pageCount = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
+  const safePage = Math.min(page, pageCount - 1);
+  const pageRows = sorted.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE);
+  useEffect(() => { setPage(0); }, [term, filter, blockFilter, sort]);
 
   const totalArsaPayi = rows.reduce((s, u) => s + (u.arsa_payi ?? 0), 0);
   const arsaOff = totalArsaPayi > 0 && Math.abs(totalArsaPayi - 1) > 0.01 && Math.abs(totalArsaPayi - 100) > 0.5;
@@ -164,25 +216,7 @@ export function UnitsHub({ rows, blockOptions, siteId, initialFilter }: {
 
   function openCollect(r: HubRow) {
     setTarget(r);
-    setAmount(r.net_borc > 0.005 ? String(Math.round(r.net_borc * 100) / 100) : '');
-    setMethod('cash'); setCollectError(''); setInfo(null);
-  }
-
-  async function collect(e: React.FormEvent) {
-    e.preventDefault();
-    if (!target) return;
-    const amt = parseTrAmount(amount);
-    if (!Number.isFinite(amt) || amt <= 0) { setCollectError('Geçerli bir tutar giriniz (örn. 750 veya 1.234,50).'); return; }
-    setCollecting(true); setCollectError('');
-    const { data, error } = await supabaseBrowser().rpc('record_collection', {
-      p_site_id: siteId, p_unit_id: target.id, p_amount: amt, p_method: method,
-    });
-    setCollecting(false);
-    if (error) { setCollectError(friendlyDbMessage(error.message)); return; }
-    const leftover = Number(data ?? 0);
-    setTarget(null);
-    setInfo(leftover > 0 ? `Tahsilat alındı. ${money(leftover, true)} avans/artan olarak kaydedildi.` : 'Tahsilat alındı.');
-    router.refresh();
+    setInfo(null);
   }
 
   async function runLateFees() {
@@ -258,15 +292,15 @@ export function UnitsHub({ rows, blockOptions, siteId, initialFilter }: {
           <Table>
             <thead>
               <tr>
-                <Th>Daire</Th>
-                <Th>Mülk Sahibi</Th>
-                <Th>Kiracı</Th>
-                <Th className="text-right">Net Borç</Th>
+                <SortTh label="Daire" k="daire" sort={sort} onSort={toggleSort} />
+                <SortTh label="Mülk Sahibi" k="malik" sort={sort} onSort={toggleSort} />
+                <SortTh label="Kiracı" k="kiraci" sort={sort} onSort={toggleSort} />
+                <SortTh label="Net Borç" k="borc" sort={sort} onSort={toggleSort} className="text-right" />
                 <Th className="text-right">İşlem</Th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map((r) => (
+              {pageRows.map((r) => (
                 <tr
                   key={r.id}
                   onClick={() => router.push(`/units/${r.id}`)}
@@ -301,6 +335,30 @@ export function UnitsHub({ rows, blockOptions, siteId, initialFilter }: {
             </tbody>
           </Table>
         )}
+        {sorted.length > PAGE_SIZE && (
+          <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-3 text-xs text-slate-500">
+            <span>
+              {safePage * PAGE_SIZE + 1}–{Math.min((safePage + 1) * PAGE_SIZE, sorted.length)} / {sorted.length} daire
+            </span>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                disabled={safePage === 0}
+                className="rounded-lg border border-slate-300 px-3 py-1.5 font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+              >
+                ← Önceki
+              </button>
+              <span className="px-2 font-semibold">{safePage + 1} / {pageCount}</span>
+              <button
+                onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
+                disabled={safePage >= pageCount - 1}
+                className="rounded-lg border border-slate-300 px-3 py-1.5 font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+              >
+                Sonraki →
+              </button>
+            </div>
+          </div>
+        )}
       </Card>
 
       {formOpen && (
@@ -330,22 +388,17 @@ export function UnitsHub({ rows, blockOptions, siteId, initialFilter }: {
       )}
 
       {target && (
-        <Modal title="Tahsilat Al" onClose={() => setTarget(null)}>
-          <p className="mb-3 text-sm text-slate-500">
-            {unitLabel(target)} · Açık borç: <span className="font-semibold text-slate-700">{money(target.toplam_borc, true)}</span>
-            {target.avans > 0.005 && <> · Avans: <span className="font-semibold text-emerald-600">{money(target.avans, true)}</span> (yeni tahakkukta otomatik mahsup edilir)</>}
-          </p>
-          <form onSubmit={collect} className="space-y-3">
-            <Field label="Tutar (₺)"><input value={amount} onChange={(e) => setAmount(sanitizeAmountInput(e.target.value))} inputMode="decimal" autoFocus placeholder="örn. 750 veya 1.234,50" className={inputCls} /></Field>
-            <Field label="Yöntem"><Segmented value={method} onChange={setMethod} options={[{ value: 'cash', label: 'Nakit' }, { value: 'bank', label: 'Havale/EFT' }]} /></Field>
-            <p className="text-xs text-slate-400">Tahsilat en eski borçtan başlanarak mahsup edilir; artan tutar avans olarak kaydedilir.</p>
-            {collectError && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{collectError}</p>}
-            <div className="flex justify-end gap-2 pt-1">
-              <button type="button" onClick={() => setTarget(null)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50">Vazgeç</button>
-              <button type="submit" disabled={collecting} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60">{collecting ? 'Kaydediliyor…' : 'Tahsilatı Kaydet'}</button>
-            </div>
-          </form>
-        </Modal>
+        <CollectModal
+          siteId={siteId}
+          unitId={target.id}
+          unitLabel={unitLabel(target)}
+          siteName={siteName}
+          totalDebt={target.toplam_borc}
+          avans={target.avans}
+          accounts={accounts}
+          onClose={() => setTarget(null)}
+          onDone={(msg) => { setTarget(null); setInfo(msg); router.refresh(); }}
+        />
       )}
     </>
   );

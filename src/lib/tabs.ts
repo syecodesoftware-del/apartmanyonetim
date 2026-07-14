@@ -21,6 +21,7 @@ export const TAB_CLUSTERS: TabCluster[] = [
       { href: '/ledger', label: 'İşletme Defteri' },
       { href: '/budget', label: 'İşletme Projesi' },
       { href: '/documents', label: 'Hazır Dökümanlar' },
+      { href: '/activity', label: 'Son İşlemler' },
     ],
   },
   {

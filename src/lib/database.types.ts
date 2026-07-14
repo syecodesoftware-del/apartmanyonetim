@@ -17,6 +17,7 @@ export type Database = {
       accruals: {
         Row: {
           amount: number
+          batch_id: string | null
           charge_type_id: string | null
           created_at: string | null
           debtor_type: string
@@ -36,6 +37,7 @@ export type Database = {
         }
         Insert: {
           amount: number
+          batch_id?: string | null
           charge_type_id?: string | null
           created_at?: string | null
           debtor_type: string
@@ -55,6 +57,7 @@ export type Database = {
         }
         Update: {
           amount?: number
+          batch_id?: string | null
           charge_type_id?: string | null
           created_at?: string | null
           debtor_type?: string
@@ -110,126 +113,6 @@ export type Database = {
           },
         ]
       }
-      budgets: {
-        Row: {
-          id: string
-          site_id: string
-          year: number
-          name: string
-          status: string
-          note: string | null
-          created_by: string | null
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          site_id: string
-          year: number
-          name?: string
-          status?: string
-          note?: string | null
-          created_by?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          site_id?: string
-          year?: number
-          name?: string
-          status?: string
-          note?: string | null
-          created_by?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      budget_lines: {
-        Row: {
-          id: string
-          budget_id: string
-          site_id: string
-          charge_type_id: string | null
-          label: string
-          annual_amount: number
-          distribution: string
-          note: string | null
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          budget_id: string
-          site_id: string
-          charge_type_id?: string | null
-          label: string
-          annual_amount: number
-          distribution?: string
-          note?: string | null
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          budget_id?: string
-          site_id?: string
-          charge_type_id?: string | null
-          label?: string
-          annual_amount?: number
-          distribution?: string
-          note?: string | null
-          created_at?: string
-        }
-        Relationships: []
-      }
-      enforcement_cases: {
-        Row: {
-          id: string
-          site_id: string
-          unit_id: string
-          debtor_user_id: string | null
-          status: string
-          case_no: string | null
-          lawyer: string | null
-          debt_at_open: number
-          note: string | null
-          opened_at: string
-          opened_by: string | null
-          closed_at: string | null
-          closed_by: string | null
-        }
-        Insert: {
-          id?: string
-          site_id: string
-          unit_id: string
-          debtor_user_id?: string | null
-          status?: string
-          case_no?: string | null
-          lawyer?: string | null
-          debt_at_open?: number
-          note?: string | null
-          opened_at?: string
-          opened_by?: string | null
-          closed_at?: string | null
-          closed_by?: string | null
-        }
-        Update: {
-          id?: string
-          site_id?: string
-          unit_id?: string
-          debtor_user_id?: string | null
-          status?: string
-          case_no?: string | null
-          lawyer?: string | null
-          debt_at_open?: number
-          note?: string | null
-          opened_at?: string
-          opened_by?: string | null
-          closed_at?: string | null
-          closed_by?: string | null
-        }
-        Relationships: []
-      }
       admin_audit_log: {
         Row: {
           action: string
@@ -268,6 +151,39 @@ export type Database = {
           },
         ]
       }
+      announcement_reads: {
+        Row: {
+          announcement_id: string
+          read_at: string
+          user_id: string
+        }
+        Insert: {
+          announcement_id: string
+          read_at?: string
+          user_id: string
+        }
+        Update: {
+          announcement_id?: string
+          read_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "announcement_reads_announcement_id_fkey"
+            columns: ["announcement_id"]
+            isOneToOne: false
+            referencedRelation: "announcements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "announcement_reads_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       announcements: {
         Row: {
           content: string
@@ -277,6 +193,7 @@ export type Database = {
           is_pinned: boolean | null
           priority: string | null
           site_id: string
+          target_block: string | null
           title: string
           updated_at: string | null
           valid_until: string | null
@@ -289,6 +206,7 @@ export type Database = {
           is_pinned?: boolean | null
           priority?: string | null
           site_id: string
+          target_block?: string | null
           title: string
           updated_at?: string | null
           valid_until?: string | null
@@ -301,6 +219,7 @@ export type Database = {
           is_pinned?: boolean | null
           priority?: string | null
           site_id?: string
+          target_block?: string | null
           title?: string
           updated_at?: string | null
           valid_until?: string | null
@@ -315,6 +234,336 @@ export type Database = {
           },
           {
             foreignKeyName: "announcements_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      assemblies: {
+        Row: {
+          call_published_at: string | null
+          created_at: string
+          created_by: string
+          first_meeting_at: string | null
+          id: string
+          kind: string
+          location: string | null
+          minutes: string | null
+          second_meeting_at: string | null
+          site_id: string
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          call_published_at?: string | null
+          created_at?: string
+          created_by: string
+          first_meeting_at?: string | null
+          id?: string
+          kind?: string
+          location?: string | null
+          minutes?: string | null
+          second_meeting_at?: string | null
+          site_id: string
+          status?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          call_published_at?: string | null
+          created_at?: string
+          created_by?: string
+          first_meeting_at?: string | null
+          id?: string
+          kind?: string
+          location?: string | null
+          minutes?: string | null
+          second_meeting_at?: string | null
+          site_id?: string
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "assemblies_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assemblies_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      assembly_attendance: {
+        Row: {
+          assembly_id: string
+          created_at: string
+          id: string
+          marked_by: string
+          present: boolean
+          proxy_name: string | null
+          site_id: string
+          unit_id: string
+        }
+        Insert: {
+          assembly_id: string
+          created_at?: string
+          id?: string
+          marked_by: string
+          present?: boolean
+          proxy_name?: string | null
+          site_id: string
+          unit_id: string
+        }
+        Update: {
+          assembly_id?: string
+          created_at?: string
+          id?: string
+          marked_by?: string
+          present?: boolean
+          proxy_name?: string | null
+          site_id?: string
+          unit_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "assembly_attendance_assembly_id_fkey"
+            columns: ["assembly_id"]
+            isOneToOne: false
+            referencedRelation: "assemblies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assembly_attendance_marked_by_fkey"
+            columns: ["marked_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assembly_attendance_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assembly_attendance_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "unit_balances"
+            referencedColumns: ["unit_id"]
+          },
+          {
+            foreignKeyName: "assembly_attendance_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      assembly_items: {
+        Row: {
+          assembly_id: string
+          created_at: string
+          decision: string | null
+          decision_note: string | null
+          description: string | null
+          id: string
+          item_no: number
+          site_id: string
+          title: string
+          voting_open: boolean
+        }
+        Insert: {
+          assembly_id: string
+          created_at?: string
+          decision?: string | null
+          decision_note?: string | null
+          description?: string | null
+          id?: string
+          item_no: number
+          site_id: string
+          title: string
+          voting_open?: boolean
+        }
+        Update: {
+          assembly_id?: string
+          created_at?: string
+          decision?: string | null
+          decision_note?: string | null
+          description?: string | null
+          id?: string
+          item_no?: number
+          site_id?: string
+          title?: string
+          voting_open?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "assembly_items_assembly_id_fkey"
+            columns: ["assembly_id"]
+            isOneToOne: false
+            referencedRelation: "assemblies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assembly_items_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      assembly_votes: {
+        Row: {
+          choice: string
+          id: string
+          item_id: string
+          site_id: string
+          source: string
+          unit_id: string
+          voted_at: string
+          voted_by: string
+        }
+        Insert: {
+          choice: string
+          id?: string
+          item_id: string
+          site_id: string
+          source?: string
+          unit_id: string
+          voted_at?: string
+          voted_by: string
+        }
+        Update: {
+          choice?: string
+          id?: string
+          item_id?: string
+          site_id?: string
+          source?: string
+          unit_id?: string
+          voted_at?: string
+          voted_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "assembly_votes_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "assembly_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assembly_votes_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assembly_votes_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "unit_balances"
+            referencedColumns: ["unit_id"]
+          },
+          {
+            foreignKeyName: "assembly_votes_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assembly_votes_voted_by_fkey"
+            columns: ["voted_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      assets: {
+        Row: {
+          category: string
+          created_at: string
+          created_by: string
+          id: string
+          inspection_note: string | null
+          location: string | null
+          name: string
+          next_inspection_date: string | null
+          note: string | null
+          purchase_date: string | null
+          quantity: number
+          serial_no: string | null
+          site_id: string
+          status: string
+          updated_at: string
+          value: number | null
+          warranty_until: string | null
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          created_by: string
+          id?: string
+          inspection_note?: string | null
+          location?: string | null
+          name: string
+          next_inspection_date?: string | null
+          note?: string | null
+          purchase_date?: string | null
+          quantity?: number
+          serial_no?: string | null
+          site_id: string
+          status?: string
+          updated_at?: string
+          value?: number | null
+          warranty_until?: string | null
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          created_by?: string
+          id?: string
+          inspection_note?: string | null
+          location?: string | null
+          name?: string
+          next_inspection_date?: string | null
+          note?: string | null
+          purchase_date?: string | null
+          quantity?: number
+          serial_no?: string | null
+          site_id?: string
+          status?: string
+          updated_at?: string
+          value?: number | null
+          warranty_until?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "assets_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assets_site_id_fkey"
             columns: ["site_id"]
             isOneToOne: false
             referencedRelation: "sites"
@@ -483,6 +732,76 @@ export type Database = {
           },
         ]
       }
+      board_decisions: {
+        Row: {
+          assembly_id: string | null
+          body: string | null
+          created_at: string
+          created_by: string
+          decision_date: string
+          decision_no: number
+          decision_year: number
+          id: string
+          participants: string | null
+          site_id: string
+          source: string
+          subject: string
+          updated_at: string
+        }
+        Insert: {
+          assembly_id?: string | null
+          body?: string | null
+          created_at?: string
+          created_by: string
+          decision_date?: string
+          decision_no: number
+          decision_year: number
+          id?: string
+          participants?: string | null
+          site_id: string
+          source?: string
+          subject: string
+          updated_at?: string
+        }
+        Update: {
+          assembly_id?: string | null
+          body?: string | null
+          created_at?: string
+          created_by?: string
+          decision_date?: string
+          decision_no?: number
+          decision_year?: number
+          id?: string
+          participants?: string | null
+          site_id?: string
+          source?: string
+          subject?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "board_decisions_assembly_id_fkey"
+            columns: ["assembly_id"]
+            isOneToOne: false
+            referencedRelation: "assemblies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "board_decisions_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "board_decisions_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bookings: {
         Row: {
           area_name: string
@@ -530,6 +849,172 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      budget_lines: {
+        Row: {
+          annual_amount: number
+          budget_id: string
+          charge_type_id: string | null
+          created_at: string
+          distribution: string
+          id: string
+          label: string
+          note: string | null
+          site_id: string
+        }
+        Insert: {
+          annual_amount: number
+          budget_id: string
+          charge_type_id?: string | null
+          created_at?: string
+          distribution?: string
+          id?: string
+          label: string
+          note?: string | null
+          site_id: string
+        }
+        Update: {
+          annual_amount?: number
+          budget_id?: string
+          charge_type_id?: string | null
+          created_at?: string
+          distribution?: string
+          id?: string
+          label?: string
+          note?: string | null
+          site_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_lines_budget_id_fkey"
+            columns: ["budget_id"]
+            isOneToOne: false
+            referencedRelation: "budgets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_lines_charge_type_id_fkey"
+            columns: ["charge_type_id"]
+            isOneToOne: false
+            referencedRelation: "charge_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_lines_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      budgets: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          name: string
+          note: string | null
+          site_id: string
+          status: string
+          updated_at: string
+          year: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name?: string
+          note?: string | null
+          site_id: string
+          status?: string
+          updated_at?: string
+          year: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name?: string
+          note?: string | null
+          site_id?: string
+          status?: string
+          updated_at?: string
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budgets_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budgets_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      campaigns: {
+        Row: {
+          active: boolean
+          created_at: string
+          created_by: string
+          description: string | null
+          discount_text: string | null
+          id: string
+          site_id: string
+          title: string
+          updated_at: string
+          valid_until: string | null
+          vendor_name: string | null
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          created_by: string
+          description?: string | null
+          discount_text?: string | null
+          id?: string
+          site_id: string
+          title: string
+          updated_at?: string
+          valid_until?: string | null
+          vendor_name?: string | null
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          discount_text?: string | null
+          id?: string
+          site_id?: string
+          title?: string
+          updated_at?: string
+          valid_until?: string | null
+          vendor_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaigns_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campaigns_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
             referencedColumns: ["id"]
           },
         ]
@@ -587,6 +1072,10 @@ export type Database = {
           receipt_url: string | null
           site_id: string
           spent_at: string
+          staff_member_id: string | null
+          supplier_invoice_id: string | null
+          wage_month: string | null
+          work_order_id: string | null
         }
         Insert: {
           amount: number
@@ -599,6 +1088,10 @@ export type Database = {
           receipt_url?: string | null
           site_id: string
           spent_at?: string
+          staff_member_id?: string | null
+          supplier_invoice_id?: string | null
+          wage_month?: string | null
+          work_order_id?: string | null
         }
         Update: {
           amount?: number
@@ -611,6 +1104,10 @@ export type Database = {
           receipt_url?: string | null
           site_id?: string
           spent_at?: string
+          staff_member_id?: string | null
+          supplier_invoice_id?: string | null
+          wage_month?: string | null
+          work_order_id?: string | null
         }
         Relationships: [
           {
@@ -646,6 +1143,113 @@ export type Database = {
             columns: ["site_id"]
             isOneToOne: false
             referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cash_expenses_staff_member_id_fkey"
+            columns: ["staff_member_id"]
+            isOneToOne: false
+            referencedRelation: "staff_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cash_expenses_supplier_invoice_id_fkey"
+            columns: ["supplier_invoice_id"]
+            isOneToOne: false
+            referencedRelation: "supplier_invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cash_expenses_work_order_id_fkey"
+            columns: ["work_order_id"]
+            isOneToOne: false
+            referencedRelation: "work_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cash_transfers: {
+        Row: {
+          amount: number
+          created_at: string | null
+          created_by: string | null
+          from_account_id: string
+          id: string
+          note: string | null
+          site_id: string
+          to_account_id: string
+          transfer_date: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string | null
+          created_by?: string | null
+          from_account_id: string
+          id?: string
+          note?: string | null
+          site_id: string
+          to_account_id: string
+          transfer_date?: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string | null
+          created_by?: string | null
+          from_account_id?: string
+          id?: string
+          note?: string | null
+          site_id?: string
+          to_account_id?: string
+          transfer_date?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cash_transfers_from_account_id_fkey"
+            columns: ["from_account_id"]
+            isOneToOne: false
+            referencedRelation: "bank_reconciliation"
+            referencedColumns: ["cash_account_id"]
+          },
+          {
+            foreignKeyName: "cash_transfers_from_account_id_fkey"
+            columns: ["from_account_id"]
+            isOneToOne: false
+            referencedRelation: "cash_account_balances"
+            referencedColumns: ["cash_account_id"]
+          },
+          {
+            foreignKeyName: "cash_transfers_from_account_id_fkey"
+            columns: ["from_account_id"]
+            isOneToOne: false
+            referencedRelation: "cash_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cash_transfers_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cash_transfers_to_account_id_fkey"
+            columns: ["to_account_id"]
+            isOneToOne: false
+            referencedRelation: "bank_reconciliation"
+            referencedColumns: ["cash_account_id"]
+          },
+          {
+            foreignKeyName: "cash_transfers_to_account_id_fkey"
+            columns: ["to_account_id"]
+            isOneToOne: false
+            referencedRelation: "cash_account_balances"
+            referencedColumns: ["cash_account_id"]
+          },
+          {
+            foreignKeyName: "cash_transfers_to_account_id_fkey"
+            columns: ["to_account_id"]
+            isOneToOne: false
+            referencedRelation: "cash_accounts"
             referencedColumns: ["id"]
           },
         ]
@@ -696,6 +1300,7 @@ export type Database = {
           amount: number
           cash_account_id: string | null
           created_at: string | null
+          created_by: string | null
           dues_payment_id: string | null
           id: string
           method: string
@@ -709,6 +1314,7 @@ export type Database = {
           amount: number
           cash_account_id?: string | null
           created_at?: string | null
+          created_by?: string | null
           dues_payment_id?: string | null
           id?: string
           method?: string
@@ -722,6 +1328,7 @@ export type Database = {
           amount?: number
           cash_account_id?: string | null
           created_at?: string | null
+          created_by?: string | null
           dues_payment_id?: string | null
           id?: string
           method?: string
@@ -751,6 +1358,13 @@ export type Database = {
             columns: ["cash_account_id"]
             isOneToOne: false
             referencedRelation: "cash_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "collections_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
           {
@@ -786,6 +1400,251 @@ export type Database = {
             columns: ["unit_id"]
             isOneToOne: false
             referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      comm_channels: {
+        Row: {
+          channel: string
+          daily_cap_per_site: number
+          enabled: boolean
+          provider: string | null
+          updated_at: string
+        }
+        Insert: {
+          channel: string
+          daily_cap_per_site?: number
+          enabled?: boolean
+          provider?: string | null
+          updated_at?: string
+        }
+        Update: {
+          channel?: string
+          daily_cap_per_site?: number
+          enabled?: boolean
+          provider?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      comm_consents: {
+        Row: {
+          changed_at: string
+          channel: string
+          granted: boolean
+          id: string
+          source: string
+          user_id: string
+        }
+        Insert: {
+          changed_at?: string
+          channel: string
+          granted: boolean
+          id?: string
+          source?: string
+          user_id: string
+        }
+        Update: {
+          changed_at?: string
+          channel?: string
+          granted?: boolean
+          id?: string
+          source?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comm_consents_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      comm_daily_counters: {
+        Row: {
+          channel: string
+          day: string
+          sent_count: number
+          site_id: string
+        }
+        Insert: {
+          channel: string
+          day: string
+          sent_count?: number
+          site_id: string
+        }
+        Update: {
+          channel?: string
+          day?: string
+          sent_count?: number
+          site_id?: string
+        }
+        Relationships: []
+      }
+      community_posts: {
+        Row: {
+          author_user_id: string
+          body: string | null
+          category: string | null
+          contact_info: string | null
+          created_at: string
+          id: string
+          kind: string
+          photos: string[] | null
+          price: number | null
+          removed_by: string | null
+          removed_reason: string | null
+          site_id: string
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          author_user_id: string
+          body?: string | null
+          category?: string | null
+          contact_info?: string | null
+          created_at?: string
+          id?: string
+          kind?: string
+          photos?: string[] | null
+          price?: number | null
+          removed_by?: string | null
+          removed_reason?: string | null
+          site_id: string
+          status?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          author_user_id?: string
+          body?: string | null
+          category?: string | null
+          contact_info?: string | null
+          created_at?: string
+          id?: string
+          kind?: string
+          photos?: string[] | null
+          price?: number | null
+          removed_by?: string | null
+          removed_reason?: string | null
+          site_id?: string
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_posts_author_user_id_fkey"
+            columns: ["author_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_posts_removed_by_fkey"
+            columns: ["removed_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_posts_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      companies: {
+        Row: {
+          address: string | null
+          created_at: string
+          created_by: string | null
+          email: string | null
+          id: string
+          is_active: boolean
+          name: string
+          phone: string | null
+          tax_office: string | null
+          vkn: string | null
+        }
+        Insert: {
+          address?: string | null
+          created_at?: string
+          created_by?: string | null
+          email?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          phone?: string | null
+          tax_office?: string | null
+          vkn?: string | null
+        }
+        Update: {
+          address?: string | null
+          created_at?: string
+          created_by?: string | null
+          email?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          phone?: string | null
+          tax_office?: string | null
+          vkn?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "companies_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      company_memberships: {
+        Row: {
+          company_id: string
+          created_at: string
+          id: string
+          is_active: boolean
+          role: string
+          user_id: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          role?: string
+          user_id: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          role?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "company_memberships_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "company_memberships_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
@@ -862,6 +1721,61 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      direct_messages: {
+        Row: {
+          body: string
+          created_at: string
+          id: string
+          read_at: string | null
+          resident_user_id: string
+          sender_is_staff: boolean
+          sender_user_id: string
+          site_id: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          id?: string
+          read_at?: string | null
+          resident_user_id: string
+          sender_is_staff?: boolean
+          sender_user_id: string
+          site_id: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          id?: string
+          read_at?: string | null
+          resident_user_id?: string
+          sender_is_staff?: boolean
+          sender_user_id?: string
+          site_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "direct_messages_resident_user_id_fkey"
+            columns: ["resident_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "direct_messages_sender_user_id_fkey"
+            columns: ["sender_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "direct_messages_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
             referencedColumns: ["id"]
           },
         ]
@@ -986,6 +1900,149 @@ export type Database = {
           },
           {
             foreignKeyName: "dues_plans_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      enforcement_cases: {
+        Row: {
+          case_no: string | null
+          closed_at: string | null
+          closed_by: string | null
+          debt_at_open: number
+          debtor_user_id: string | null
+          id: string
+          lawyer: string | null
+          note: string | null
+          opened_at: string
+          opened_by: string | null
+          site_id: string
+          status: string
+          unit_id: string
+        }
+        Insert: {
+          case_no?: string | null
+          closed_at?: string | null
+          closed_by?: string | null
+          debt_at_open?: number
+          debtor_user_id?: string | null
+          id?: string
+          lawyer?: string | null
+          note?: string | null
+          opened_at?: string
+          opened_by?: string | null
+          site_id: string
+          status?: string
+          unit_id: string
+        }
+        Update: {
+          case_no?: string | null
+          closed_at?: string | null
+          closed_by?: string | null
+          debt_at_open?: number
+          debtor_user_id?: string | null
+          id?: string
+          lawyer?: string | null
+          note?: string | null
+          opened_at?: string
+          opened_by?: string | null
+          site_id?: string
+          status?: string
+          unit_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "enforcement_cases_closed_by_fkey"
+            columns: ["closed_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "enforcement_cases_debtor_user_id_fkey"
+            columns: ["debtor_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "enforcement_cases_opened_by_fkey"
+            columns: ["opened_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "enforcement_cases_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "enforcement_cases_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "unit_balances"
+            referencedColumns: ["unit_id"]
+          },
+          {
+            foreignKeyName: "enforcement_cases_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      enforcement_events: {
+        Row: {
+          body: string
+          case_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          kind: string
+          site_id: string
+        }
+        Insert: {
+          body: string
+          case_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          kind?: string
+          site_id: string
+        }
+        Update: {
+          body?: string
+          case_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          kind?: string
+          site_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "enforcement_events_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "enforcement_cases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "enforcement_events_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "enforcement_events_site_id_fkey"
             columns: ["site_id"]
             isOneToOne: false
             referencedRelation: "sites"
@@ -1125,6 +2182,240 @@ export type Database = {
           },
         ]
       }
+      message_outbox: {
+        Row: {
+          attempts: number
+          body: string
+          channel: string
+          created_at: string
+          data: Json
+          id: string
+          last_error: string | null
+          max_attempts: number
+          next_attempt_at: string
+          provider_message_id: string | null
+          sent_at: string | null
+          site_id: string | null
+          status: string
+          subject: string | null
+          template_key: string | null
+          to_address: string | null
+          user_id: string | null
+        }
+        Insert: {
+          attempts?: number
+          body: string
+          channel: string
+          created_at?: string
+          data?: Json
+          id?: string
+          last_error?: string | null
+          max_attempts?: number
+          next_attempt_at?: string
+          provider_message_id?: string | null
+          sent_at?: string | null
+          site_id?: string | null
+          status?: string
+          subject?: string | null
+          template_key?: string | null
+          to_address?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          attempts?: number
+          body?: string
+          channel?: string
+          created_at?: string
+          data?: Json
+          id?: string
+          last_error?: string | null
+          max_attempts?: number
+          next_attempt_at?: string
+          provider_message_id?: string | null
+          sent_at?: string | null
+          site_id?: string | null
+          status?: string
+          subject?: string | null
+          template_key?: string | null
+          to_address?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "message_outbox_channel_fkey"
+            columns: ["channel"]
+            isOneToOne: false
+            referencedRelation: "comm_channels"
+            referencedColumns: ["channel"]
+          },
+          {
+            foreignKeyName: "message_outbox_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "message_outbox_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      message_templates: {
+        Row: {
+          active: boolean
+          body: string
+          channel: string
+          key: string
+          subject: string | null
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          body: string
+          channel: string
+          key: string
+          subject?: string | null
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          body?: string
+          channel?: string
+          key?: string
+          subject?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "message_templates_channel_fkey"
+            columns: ["channel"]
+            isOneToOne: false
+            referencedRelation: "comm_channels"
+            referencedColumns: ["channel"]
+          },
+        ]
+      }
+      meter_readings: {
+        Row: {
+          created_at: string
+          created_by: string
+          id: string
+          meter_id: string
+          note: string | null
+          read_at: string
+          reading: number
+          site_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          id?: string
+          meter_id: string
+          note?: string | null
+          read_at?: string
+          reading: number
+          site_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          id?: string
+          meter_id?: string
+          note?: string | null
+          read_at?: string
+          reading?: number
+          site_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meter_readings_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meter_readings_meter_id_fkey"
+            columns: ["meter_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meter_readings_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meters: {
+        Row: {
+          active: boolean
+          created_at: string
+          created_by: string
+          id: string
+          kind: string
+          serial_no: string | null
+          site_id: string
+          unit_id: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          created_by: string
+          id?: string
+          kind?: string
+          serial_no?: string | null
+          site_id: string
+          unit_id: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          created_by?: string
+          id?: string
+          kind?: string
+          serial_no?: string | null
+          site_id?: string
+          unit_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meters_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meters_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meters_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "unit_balances"
+            referencedColumns: ["unit_id"]
+          },
+          {
+            foreignKeyName: "meters_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notifications: {
         Row: {
           body: string | null
@@ -1165,6 +2456,87 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      packages: {
+        Row: {
+          carrier: string | null
+          created_at: string
+          delivered_at: string | null
+          delivered_by: string | null
+          delivered_note: string | null
+          description: string | null
+          id: string
+          received_at: string
+          received_by: string
+          site_id: string
+          status: string
+          unit_id: string
+        }
+        Insert: {
+          carrier?: string | null
+          created_at?: string
+          delivered_at?: string | null
+          delivered_by?: string | null
+          delivered_note?: string | null
+          description?: string | null
+          id?: string
+          received_at?: string
+          received_by: string
+          site_id: string
+          status?: string
+          unit_id: string
+        }
+        Update: {
+          carrier?: string | null
+          created_at?: string
+          delivered_at?: string | null
+          delivered_by?: string | null
+          delivered_note?: string | null
+          description?: string | null
+          id?: string
+          received_at?: string
+          received_by?: string
+          site_id?: string
+          status?: string
+          unit_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "packages_delivered_by_fkey"
+            columns: ["delivered_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "packages_received_by_fkey"
+            columns: ["received_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "packages_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "packages_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "unit_balances"
+            referencedColumns: ["unit_id"]
+          },
+          {
+            foreignKeyName: "packages_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
             referencedColumns: ["id"]
           },
         ]
@@ -1396,6 +2768,66 @@ export type Database = {
           },
         ]
       }
+      site_documents: {
+        Row: {
+          category: string
+          created_at: string
+          entity_id: string | null
+          entity_type: string | null
+          id: string
+          mime: string | null
+          note: string | null
+          site_id: string
+          size_bytes: number | null
+          storage_path: string
+          title: string
+          uploaded_by: string
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          id?: string
+          mime?: string | null
+          note?: string | null
+          site_id: string
+          size_bytes?: number | null
+          storage_path: string
+          title: string
+          uploaded_by: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          id?: string
+          mime?: string | null
+          note?: string | null
+          site_id?: string
+          size_bytes?: number | null
+          storage_path?: string
+          title?: string
+          uploaded_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "site_documents_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_documents_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       site_invitations: {
         Row: {
           apartment_number: string | null
@@ -1548,6 +2980,7 @@ export type Database = {
           building_number: string | null
           city: string | null
           code_generated_at: string | null
+          company_id: string | null
           created_at: string | null
           deleted_at: string | null
           deleted_by: string | null
@@ -1576,6 +3009,7 @@ export type Database = {
           building_number?: string | null
           city?: string | null
           code_generated_at?: string | null
+          company_id?: string | null
           created_at?: string | null
           deleted_at?: string | null
           deleted_by?: string | null
@@ -1604,6 +3038,7 @@ export type Database = {
           building_number?: string | null
           city?: string | null
           code_generated_at?: string | null
+          company_id?: string | null
           created_at?: string | null
           deleted_at?: string | null
           deleted_by?: string | null
@@ -1625,7 +3060,142 @@ export type Database = {
           trial_started_at?: string | null
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "sites_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      staff_members: {
+        Row: {
+          active: boolean
+          created_at: string
+          created_by: string
+          end_date: string | null
+          full_name: string
+          id: string
+          id_no: string | null
+          monthly_wage: number | null
+          note: string | null
+          phone: string | null
+          role: string
+          site_id: string
+          start_date: string | null
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          created_by: string
+          end_date?: string | null
+          full_name: string
+          id?: string
+          id_no?: string | null
+          monthly_wage?: number | null
+          note?: string | null
+          phone?: string | null
+          role?: string
+          site_id: string
+          start_date?: string | null
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          created_by?: string
+          end_date?: string | null
+          full_name?: string
+          id?: string
+          id_no?: string | null
+          monthly_wage?: number | null
+          note?: string | null
+          phone?: string | null
+          role?: string
+          site_id?: string
+          start_date?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "staff_members_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "staff_members_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      staff_shifts: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          end_time: string
+          id: string
+          note: string | null
+          shift_date: string
+          site_id: string
+          staff_id: string
+          start_time: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          end_time: string
+          id?: string
+          note?: string | null
+          shift_date: string
+          site_id: string
+          staff_id: string
+          start_time: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          end_time?: string
+          id?: string
+          note?: string | null
+          shift_date?: string
+          site_id?: string
+          staff_id?: string
+          start_time?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "staff_shifts_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "staff_shifts_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "staff_shifts_staff_id_fkey"
+            columns: ["staff_id"]
+            isOneToOne: false
+            referencedRelation: "staff_members"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       subscription_payments: {
         Row: {
@@ -1667,6 +3237,178 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "subscription_payments_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      supplier_invoices: {
+        Row: {
+          amount: number
+          approved_at: string | null
+          approved_by: string | null
+          created_at: string
+          created_by: string
+          description: string | null
+          due_date: string | null
+          id: string
+          invoice_date: string | null
+          invoice_no: string | null
+          paid_at: string | null
+          paid_by: string | null
+          reject_reason: string | null
+          site_id: string
+          status: string
+          supplier_id: string
+          updated_at: string
+          work_order_id: string | null
+        }
+        Insert: {
+          amount: number
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          created_by: string
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          invoice_date?: string | null
+          invoice_no?: string | null
+          paid_at?: string | null
+          paid_by?: string | null
+          reject_reason?: string | null
+          site_id: string
+          status?: string
+          supplier_id: string
+          updated_at?: string
+          work_order_id?: string | null
+        }
+        Update: {
+          amount?: number
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          invoice_date?: string | null
+          invoice_no?: string | null
+          paid_at?: string | null
+          paid_by?: string | null
+          reject_reason?: string | null
+          site_id?: string
+          status?: string
+          supplier_id?: string
+          updated_at?: string
+          work_order_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supplier_invoices_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_invoices_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_invoices_paid_by_fkey"
+            columns: ["paid_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_invoices_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_invoices_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_invoices_work_order_id_fkey"
+            columns: ["work_order_id"]
+            isOneToOne: false
+            referencedRelation: "work_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      suppliers: {
+        Row: {
+          active: boolean
+          category: string
+          contact_person: string | null
+          created_at: string
+          created_by: string
+          email: string | null
+          iban: string | null
+          id: string
+          name: string
+          note: string | null
+          phone: string | null
+          site_id: string
+          updated_at: string
+          vkn: string | null
+        }
+        Insert: {
+          active?: boolean
+          category?: string
+          contact_person?: string | null
+          created_at?: string
+          created_by: string
+          email?: string | null
+          iban?: string | null
+          id?: string
+          name: string
+          note?: string | null
+          phone?: string | null
+          site_id: string
+          updated_at?: string
+          vkn?: string | null
+        }
+        Update: {
+          active?: boolean
+          category?: string
+          contact_person?: string | null
+          created_at?: string
+          created_by?: string
+          email?: string | null
+          iban?: string | null
+          id?: string
+          name?: string
+          note?: string | null
+          phone?: string | null
+          site_id?: string
+          updated_at?: string
+          vkn?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "suppliers_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "suppliers_site_id_fkey"
             columns: ["site_id"]
             isOneToOne: false
             referencedRelation: "sites"
@@ -1751,6 +3493,68 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      unit_vehicles: {
+        Row: {
+          active: boolean
+          created_at: string
+          created_by: string
+          id: string
+          label: string | null
+          plate: string
+          site_id: string
+          unit_id: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          created_by: string
+          id?: string
+          label?: string | null
+          plate: string
+          site_id: string
+          unit_id: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          created_by?: string
+          id?: string
+          label?: string | null
+          plate?: string
+          site_id?: string
+          unit_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "unit_vehicles_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "unit_vehicles_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "unit_vehicles_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "unit_balances"
+            referencedColumns: ["unit_id"]
+          },
+          {
+            foreignKeyName: "unit_vehicles_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
             referencedColumns: ["id"]
           },
         ]
@@ -1846,6 +3650,7 @@ export type Database = {
       }
       users: {
         Row: {
+          active_company_id: string | null
           apartment_number: string | null
           approval_status: string | null
           approved_at: string | null
@@ -1869,6 +3674,7 @@ export type Database = {
           unit_id: string | null
         }
         Insert: {
+          active_company_id?: string | null
           apartment_number?: string | null
           approval_status?: string | null
           approved_at?: string | null
@@ -1892,6 +3698,7 @@ export type Database = {
           unit_id?: string | null
         }
         Update: {
+          active_company_id?: string | null
           apartment_number?: string | null
           approval_status?: string | null
           approved_at?: string | null
@@ -1916,6 +3723,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "users_active_company_id_fkey"
+            columns: ["active_company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "users_approved_by_fkey"
             columns: ["approved_by"]
             isOneToOne: false
@@ -1938,6 +3752,337 @@ export type Database = {
           },
           {
             foreignKeyName: "users_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      visitor_passes: {
+        Row: {
+          arrived_at: string | null
+          code: string
+          created_at: string
+          created_by: string
+          expected_date: string
+          id: string
+          plate: string | null
+          site_id: string
+          status: string
+          unit_id: string
+          verified_by: string | null
+          visitor_name: string
+        }
+        Insert: {
+          arrived_at?: string | null
+          code: string
+          created_at?: string
+          created_by: string
+          expected_date?: string
+          id?: string
+          plate?: string | null
+          site_id: string
+          status?: string
+          unit_id: string
+          verified_by?: string | null
+          visitor_name: string
+        }
+        Update: {
+          arrived_at?: string | null
+          code?: string
+          created_at?: string
+          created_by?: string
+          expected_date?: string
+          id?: string
+          plate?: string | null
+          site_id?: string
+          status?: string
+          unit_id?: string
+          verified_by?: string | null
+          visitor_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "visitor_passes_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "visitor_passes_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "visitor_passes_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "unit_balances"
+            referencedColumns: ["unit_id"]
+          },
+          {
+            foreignKeyName: "visitor_passes_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "visitor_passes_verified_by_fkey"
+            columns: ["verified_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      work_order_activity: {
+        Row: {
+          action: string
+          actor_user_id: string | null
+          created_at: string
+          id: string
+          note: string | null
+          site_id: string
+          work_order_id: string
+        }
+        Insert: {
+          action: string
+          actor_user_id?: string | null
+          created_at?: string
+          id?: string
+          note?: string | null
+          site_id: string
+          work_order_id: string
+        }
+        Update: {
+          action?: string
+          actor_user_id?: string | null
+          created_at?: string
+          id?: string
+          note?: string | null
+          site_id?: string
+          work_order_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "work_order_activity_actor_user_id_fkey"
+            columns: ["actor_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "work_order_activity_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "work_order_activity_work_order_id_fkey"
+            columns: ["work_order_id"]
+            isOneToOne: false
+            referencedRelation: "work_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      work_order_templates: {
+        Row: {
+          active: boolean
+          assignee_name: string | null
+          assignee_phone: string | null
+          created_at: string
+          created_by: string
+          day_of_month: number
+          description: string | null
+          due_days: number
+          id: string
+          interval_months: number
+          kind: string
+          last_generated_period: string | null
+          priority: string
+          site_id: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          assignee_name?: string | null
+          assignee_phone?: string | null
+          created_at?: string
+          created_by?: string
+          day_of_month?: number
+          description?: string | null
+          due_days?: number
+          id?: string
+          interval_months?: number
+          kind?: string
+          last_generated_period?: string | null
+          priority?: string
+          site_id: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          assignee_name?: string | null
+          assignee_phone?: string | null
+          created_at?: string
+          created_by?: string
+          day_of_month?: number
+          description?: string | null
+          due_days?: number
+          id?: string
+          interval_months?: number
+          kind?: string
+          last_generated_period?: string | null
+          priority?: string
+          site_id?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "work_order_templates_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "work_order_templates_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      work_orders: {
+        Row: {
+          assignee_name: string | null
+          assignee_phone: string | null
+          assignee_user_id: string | null
+          completed_at: string | null
+          completed_by: string | null
+          cost: number
+          cost_note: string | null
+          created_at: string
+          created_by: string
+          description: string | null
+          due_date: string | null
+          id: string
+          kind: string
+          priority: string
+          site_id: string
+          source_complaint_id: string | null
+          status: string
+          title: string
+          unit_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          assignee_name?: string | null
+          assignee_phone?: string | null
+          assignee_user_id?: string | null
+          completed_at?: string | null
+          completed_by?: string | null
+          cost?: number
+          cost_note?: string | null
+          created_at?: string
+          created_by: string
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          kind: string
+          priority?: string
+          site_id: string
+          source_complaint_id?: string | null
+          status?: string
+          title: string
+          unit_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          assignee_name?: string | null
+          assignee_phone?: string | null
+          assignee_user_id?: string | null
+          completed_at?: string | null
+          completed_by?: string | null
+          cost?: number
+          cost_note?: string | null
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          kind?: string
+          priority?: string
+          site_id?: string
+          source_complaint_id?: string | null
+          status?: string
+          title?: string
+          unit_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "work_orders_assignee_user_id_fkey"
+            columns: ["assignee_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "work_orders_completed_by_fkey"
+            columns: ["completed_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "work_orders_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "work_orders_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "work_orders_source_complaint_id_fkey"
+            columns: ["source_complaint_id"]
+            isOneToOne: false
+            referencedRelation: "complaints"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "work_orders_source_complaint_id_fkey"
+            columns: ["source_complaint_id"]
+            isOneToOne: false
+            referencedRelation: "complaints_manager_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "work_orders_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "unit_balances"
+            referencedColumns: ["unit_id"]
+          },
+          {
+            foreignKeyName: "work_orders_unit_id_fkey"
             columns: ["unit_id"]
             isOneToOne: false
             referencedRelation: "units"
@@ -2011,6 +4156,7 @@ export type Database = {
           detay: string | null
           hareket_tarihi: string | null
           id: string | null
+          kaynak: string | null
           sirala: string | null
           site_id: string | null
           tur: string | null
@@ -2180,365 +4326,20 @@ export type Database = {
       }
     }
     Functions: {
-      get_unit_shared_debt: { Args: never; Returns: Json }
-      create_work_order: {
-        Args: {
-          p_kind: string
-          p_title: string
-          p_description?: string
-          p_priority?: string
-          p_unit_id?: string
-          p_due_date?: string
-          p_source_complaint_id?: string
-        }
-        Returns: string
-      }
-      assign_work_order: {
-        Args: {
-          p_id: string
-          p_assignee_user_id?: string
-          p_assignee_name?: string
-          p_assignee_phone?: string
-        }
-        Returns: undefined
-      }
-      update_work_order_status: {
-        Args: { p_id: string; p_status: string; p_note?: string }
-        Returns: undefined
-      }
-      set_work_order_cost: {
-        Args: { p_id: string; p_cost: number; p_cost_note?: string }
-        Returns: undefined
-      }
-      convert_complaint_to_work_order: {
-        Args: { p_complaint_id: string }
-        Returns: string
-      }
-      get_work_orders: { Args: { p_status?: string }; Returns: Json }
-      get_work_order_detail: { Args: { p_id: string }; Returns: Json }
-      add_site_document: {
-        Args: {
-          p_category: string
-          p_title: string
-          p_storage_path: string
-          p_mime?: string
-          p_size_bytes?: number
-          p_entity_type?: string
-          p_entity_id?: string
-          p_note?: string
-        }
-        Returns: string
-      }
-      delete_site_document: { Args: { p_id: string }; Returns: string }
-      get_site_documents: {
-        Args: { p_category?: string; p_entity_type?: string; p_entity_id?: string }
-        Returns: Json
-      }
-      save_asset: {
-        Args: {
-          p_id: string | null
-          p_name: string
-          p_category?: string
-          p_location?: string
-          p_quantity?: number
-          p_serial_no?: string
-          p_purchase_date?: string
-          p_value?: number
-          p_status?: string
-          p_next_inspection_date?: string
-          p_inspection_note?: string
-          p_warranty_until?: string
-          p_note?: string
-        }
-        Returns: string
-      }
-      delete_asset: { Args: { p_id: string }; Returns: undefined }
-      get_assets: { Args: { p_category?: string }; Returns: Json }
-      get_inspection_due: { Args: { p_within_days?: number }; Returns: Json }
-      save_staff: {
-        Args: {
-          p_id: string | null
-          p_full_name: string
-          p_role?: string
-          p_phone?: string
-          p_id_no?: string
-          p_start_date?: string
-          p_end_date?: string
-          p_monthly_wage?: number
-          p_active?: boolean
-          p_note?: string
-        }
-        Returns: string
-      }
-      delete_staff: { Args: { p_id: string }; Returns: undefined }
-      get_staff: { Args: { p_include_inactive?: boolean }; Returns: Json }
-      save_staff_shift: {
-        Args: { p_id: string | null; p_staff_id: string; p_date: string; p_start: string; p_end: string; p_note?: string }
-        Returns: string
-      }
-      delete_staff_shift: { Args: { p_id: string }; Returns: undefined }
-      get_staff_shifts: { Args: { p_from: string; p_to: string }; Returns: Json }
-      save_supplier: {
-        Args: {
-          p_id: string | null
-          p_name: string
-          p_category?: string
-          p_vkn?: string
-          p_phone?: string
-          p_email?: string
-          p_iban?: string
-          p_contact_person?: string
-          p_active?: boolean
-          p_note?: string
-        }
-        Returns: string
-      }
-      delete_supplier: { Args: { p_id: string }; Returns: undefined }
-      get_suppliers: { Args: { p_include_inactive?: boolean }; Returns: Json }
-      save_supplier_invoice: {
-        Args: {
-          p_id: string | null
-          p_supplier_id: string
-          p_amount: number
-          p_invoice_no?: string
-          p_invoice_date?: string
-          p_due_date?: string
-          p_description?: string
-          p_work_order_id?: string
-        }
-        Returns: string
-      }
-      approve_invoice: { Args: { p_id: string }; Returns: undefined }
-      reject_invoice: { Args: { p_id: string; p_reason?: string }; Returns: undefined }
-      mark_invoice_paid: { Args: { p_id: string; p_paid_date?: string }; Returns: undefined }
-      get_supplier_invoices: { Args: { p_status?: string; p_supplier_id?: string }; Returns: Json }
-      get_payment_queue: { Args: never; Returns: Json }
-      save_assembly: {
-        Args: {
-          p_id: string | null
-          p_title: string
-          p_kind?: string
-          p_first_meeting_at?: string
-          p_second_meeting_at?: string
-          p_location?: string
-        }
-        Returns: string
-      }
-      publish_assembly_call: { Args: { p_id: string }; Returns: undefined }
-      save_assembly_item: {
-        Args: {
-          p_id: string | null
-          p_assembly_id: string
-          p_item_no: number
-          p_title: string
-          p_description?: string
-        }
-        Returns: string
-      }
-      delete_assembly_item: { Args: { p_id: string }; Returns: undefined }
-      set_item_voting: { Args: { p_item_id: string; p_open: boolean }; Returns: undefined }
-      decide_item: { Args: { p_item_id: string; p_decision: string; p_note?: string }; Returns: undefined }
-      cast_assembly_vote: { Args: { p_item_id: string; p_unit_id: string; p_choice: string }; Returns: undefined }
-      mark_attendance: {
-        Args: { p_assembly_id: string; p_unit_id: string; p_present?: boolean; p_proxy_name?: string }
-        Returns: undefined
-      }
-      close_assembly: { Args: { p_id: string; p_status: string; p_minutes?: string }; Returns: undefined }
-      get_assemblies: { Args: never; Returns: Json }
-      get_assembly_detail: { Args: { p_id: string }; Returns: Json }
-      get_my_assembly_ballot: { Args: never; Returns: Json }
-      save_board_decision: {
-        Args: {
-          p_id: string | null
-          p_subject: string
-          p_body?: string
-          p_decision_date?: string
-          p_participants?: string
-          p_source?: string
-          p_assembly_id?: string
-        }
-        Returns: string
-      }
-      delete_board_decision: { Args: { p_id: string }; Returns: undefined }
-      get_board_decisions: { Args: { p_year?: number }; Returns: Json }
-      get_isletme_defteri: { Args: { p_year: number; p_month?: number }; Returns: Json }
-      save_vehicle: {
-        Args: { p_id: string | null; p_unit_id: string; p_plate: string; p_label?: string; p_active?: boolean }
-        Returns: string
-      }
-      delete_vehicle: { Args: { p_id: string }; Returns: undefined }
-      get_my_vehicles: { Args: never; Returns: Json }
-      lookup_plate: { Args: { p_plate: string }; Returns: Json }
-      create_visitor_pass: {
-        Args: { p_unit_id: string; p_visitor_name: string; p_plate?: string; p_expected_date?: string }
-        Returns: Json
-      }
-      cancel_visitor_pass: { Args: { p_id: string }; Returns: undefined }
-      get_my_visitor_passes: { Args: never; Returns: Json }
-      get_visitor_passes: { Args: { p_date?: string; p_status?: string }; Returns: Json }
-      verify_visitor_code: { Args: { p_code: string }; Returns: Json }
-      register_package: { Args: { p_unit_id: string; p_carrier?: string; p_description?: string }; Returns: string }
-      mark_package_delivered: { Args: { p_id: string; p_note?: string }; Returns: undefined }
-      get_packages: { Args: { p_status?: string }; Returns: Json }
-      get_my_packages: { Args: never; Returns: Json }
-      send_dm: { Args: { p_body: string; p_resident_user_id?: string }; Returns: string }
-      get_my_thread: { Args: never; Returns: Json }
-      get_dm_threads: { Args: never; Returns: Json }
-      get_dm_thread: { Args: { p_resident_user_id: string }; Returns: Json }
-      save_meter: {
-        Args: { p_id: string | null; p_unit_id: string; p_kind?: string; p_serial_no?: string; p_active?: boolean }
-        Returns: string
-      }
-      delete_meter: { Args: { p_id: string }; Returns: undefined }
-      record_meter_reading: {
-        Args: { p_meter_id: string; p_reading: number; p_read_at?: string; p_note?: string; p_allow_decrease?: boolean }
-        Returns: string
-      }
-      get_meters: { Args: { p_kind?: string }; Returns: Json }
-      get_meter_history: { Args: { p_meter_id: string }; Returns: Json }
-      get_my_meters: { Args: never; Returns: Json }
-      create_community_post: {
-        Args: { p_kind: string; p_title: string; p_body?: string; p_price?: number; p_contact_info?: string; p_photos?: string[]; p_category?: string }
-        Returns: string
-      }
-      close_community_post: { Args: { p_id: string; p_status: string }; Returns: undefined }
-      remove_community_post: { Args: { p_id: string; p_reason?: string }; Returns: undefined }
-      get_community_posts: { Args: { p_kind?: string; p_category?: string }; Returns: Json }
-      save_campaign: {
-        Args: {
-          p_id: string | null
-          p_title: string
-          p_vendor_name?: string
-          p_description?: string
-          p_discount_text?: string
-          p_valid_until?: string
-          p_active?: boolean
-        }
-        Returns: string
-      }
-      delete_campaign: { Args: { p_id: string }; Returns: undefined }
-      get_campaigns: { Args: never; Returns: Json }
-      open_enforcement: {
-        Args: {
-          p_unit_id: string
-          p_status?: string
-          p_case_no?: string
-          p_lawyer?: string
-          p_note?: string
-        }
-        Returns: string
-      }
-      update_enforcement: {
-        Args: {
-          p_case_id: string
-          p_status?: string
-          p_case_no?: string
-          p_lawyer?: string
-          p_note?: string
-        }
-        Returns: undefined
-      }
-      get_enforcement_cases: {
-        Args: { p_include_closed?: boolean }
-        Returns: {
-          id: string
-          unit_id: string
-          block: string
-          apartment_number: string
-          debtor_name: string
-          status: string
-          case_no: string
-          lawyer: string
-          debt_at_open: number
-          current_debt: number
-          note: string
-          opened_at: string
-          closed_at: string
-        }[]
-      }
-      save_budget: {
-        Args: { p_year: number; p_name?: string; p_note?: string }
-        Returns: string
-      }
-      save_budget_line: {
-        Args: {
-          p_budget_id: string
-          p_label: string
-          p_annual_amount: number
-          p_distribution?: string
-          p_charge_type_id?: string
-          p_line_id?: string
-          p_note?: string
-        }
-        Returns: string
-      }
-      delete_budget_line: { Args: { p_line_id: string }; Returns: undefined }
-      get_budget_report: {
-        Args: { p_budget_id: string }
-        Returns: {
-          line_id: string
-          label: string
-          distribution: string
-          charge_type_id: string
-          charge_type_name: string
-          planned_annual: number
-          planned_monthly: number
-          accrued_ytd: number
-          remaining: number
-        }[]
-      }
-      generate_accruals_from_budget: {
-        Args: { p_budget_id: string; p_period_month: number; p_period_year: number; p_due_date: string }
-        Returns: Json
-      }
-      create_company: {
-        Args: {
-          p_address?: string
-          p_email?: string
-          p_name: string
-          p_phone?: string
-          p_tax_office?: string
-          p_vkn?: string
-        }
-        Returns: string
-      }
-      switch_active_company: { Args: { p_company_id: string }; Returns: string }
-      get_my_companies: {
-        Args: never
-        Returns: {
-          company_id: string
-          is_active_company: boolean
-          name: string
-          role: string
-          site_count: number
-          vkn: string
-        }[]
-      }
-      link_site_to_company: {
-        Args: { p_company_id: string; p_site_id: string }
-        Returns: undefined
-      }
-      unlink_site_from_company: { Args: { p_site_id: string }; Returns: undefined }
-      get_company_portfolio: {
-        Args: { p_company_id?: string }
-        Returns: {
-          accrued_total: number
-          bank_balance: number
-          cash_balance: number
-          collected_total: number
-          open_debt: number
-          site_id: string
-          site_name: string
-        }[]
-      }
       _allocate_collection_core: {
         Args: { p_collection_id: string }
         Returns: number
       }
+      _assert_budget_write: { Args: { p_budget_id: string }; Returns: string }
       _assert_site_manager: { Args: { p_site_id: string }; Returns: undefined }
+      _calculate_late_fees_core: {
+        Args: { p_as_of_date: string; p_site_id: string }
+        Returns: number
+      }
       _generate_accruals_core: {
         Args: {
           p_amount: number
+          p_batch_id?: string
           p_charge_type_id: string
           p_debtor_type?: string
           p_distribution: string
@@ -2549,9 +4350,44 @@ export type Database = {
         }
         Returns: number
       }
+      _link_resident_tenancy: {
+        Args: {
+          p_apartment: string
+          p_block: string
+          p_full_name: string
+          p_site_id: string
+          p_tc: string
+          p_user_id: string
+        }
+        Returns: number
+      }
+      _my_admin_company_ids: { Args: never; Returns: string[] }
+      _my_company_ids: { Args: never; Returns: string[] }
+      _occupies_unit: {
+        Args: { p_uid: string; p_unit: string }
+        Returns: boolean
+      }
       _reallocate_site_advances_core: {
         Args: { p_site_id: string }
         Returns: number
+      }
+      _validate_vkn: { Args: { p_vkn: string }; Returns: undefined }
+      add_enforcement_note: {
+        Args: { p_case_id: string; p_note: string }
+        Returns: undefined
+      }
+      add_site_document: {
+        Args: {
+          p_category: string
+          p_entity_id?: string
+          p_entity_type?: string
+          p_mime?: string
+          p_note?: string
+          p_size_bytes?: number
+          p_storage_path: string
+          p_title: string
+        }
+        Returns: string
       }
       admin_approve_site_deletion: {
         Args: { p_admin_id: string; p_note?: string; p_request_id: string }
@@ -2565,11 +4401,21 @@ export type Database = {
         Args: { p_txn_id: string; p_unit_id: string }
         Returns: Json
       }
+      approve_invoice: { Args: { p_id: string | null }; Returns: undefined }
       approve_site_membership: {
         Args: {
           p_approve: boolean
-          p_membership_id: string
+          p_membership_id: string | null
           p_unit_id?: string
+        }
+        Returns: undefined
+      }
+      assign_work_order: {
+        Args: {
+          p_assignee_name?: string
+          p_assignee_phone?: string
+          p_assignee_user_id?: string
+          p_id: string | null
         }
         Returns: undefined
       }
@@ -2577,20 +4423,96 @@ export type Database = {
       auth_user_role: { Args: never; Returns: string }
       auth_user_site_id: { Args: never; Returns: string }
       auth_user_unit_id: { Args: never; Returns: string }
-      bulk_import_units_residents: { Args: { p_rows: Json }; Returns: Json }
+      bulk_import_units_residents: {
+        Args: { p_rows: Json; p_update_existing?: boolean }
+        Returns: Json
+      }
       calculate_late_fees: {
         Args: { p_as_of_date: string; p_site_id: string }
         Returns: number
+      }
+      cancel_accrual_batch: { Args: { p_batch_id: string }; Returns: number }
+      cancel_collection: {
+        Args: { p_collection_id: string; p_reason: string }
+        Returns: undefined
       }
       cancel_site_deletion_request: {
         Args: { p_request_id: string }
         Returns: Json
       }
+      cancel_visitor_pass: { Args: { p_id: string | null }; Returns: undefined }
+      cast_assembly_vote: {
+        Args: { p_choice: string; p_item_id: string; p_unit_id: string }
+        Returns: undefined
+      }
       check_auth_rate_limit: {
         Args: { p_key: string; p_max?: number; p_window_seconds?: number }
         Returns: boolean
       }
+      claim_outbox_batch: {
+        Args: { p_limit?: number }
+        Returns: {
+          attempts: number
+          body: string
+          channel: string
+          created_at: string
+          data: Json
+          id: string
+          last_error: string | null
+          max_attempts: number
+          next_attempt_at: string
+          provider_message_id: string | null
+          sent_at: string | null
+          site_id: string | null
+          status: string
+          subject: string | null
+          template_key: string | null
+          to_address: string | null
+          user_id: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "message_outbox"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       clear_auth_rate_limit: { Args: { p_key: string }; Returns: undefined }
+      close_assembly: {
+        Args: { p_id: string | null; p_minutes?: string; p_status: string }
+        Returns: undefined
+      }
+      close_community_post: {
+        Args: { p_id: string | null; p_status: string }
+        Returns: undefined
+      }
+      convert_complaint_to_work_order: {
+        Args: { p_complaint_id: string }
+        Returns: string
+      }
+      create_community_post: {
+        Args: {
+          p_body?: string
+          p_category?: string
+          p_contact_info?: string
+          p_kind: string
+          p_photos?: string[]
+          p_price?: number
+          p_title: string
+        }
+        Returns: string
+      }
+      create_company: {
+        Args: {
+          p_address?: string
+          p_email?: string
+          p_name: string
+          p_phone?: string
+          p_tax_office?: string
+          p_vkn?: string
+        }
+        Returns: string
+      }
       create_unit_accrual: {
         Args: {
           p_amount: number
@@ -2602,13 +4524,70 @@ export type Database = {
         }
         Returns: string
       }
+      create_visitor_pass: {
+        Args: {
+          p_expected_date?: string
+          p_plate?: string
+          p_unit_id: string
+          p_visitor_name: string
+        }
+        Returns: Json
+      }
+      create_work_order: {
+        Args: {
+          p_description?: string
+          p_due_date?: string
+          p_kind: string
+          p_priority?: string
+          p_source_complaint_id?: string
+          p_title: string
+          p_unit_id?: string
+        }
+        Returns: string
+      }
+      decide_item: {
+        Args: { p_decision: string; p_item_id: string; p_note?: string }
+        Returns: undefined
+      }
+      delete_assembly_item: { Args: { p_id: string | null }; Returns: undefined }
+      delete_asset: { Args: { p_id: string | null }; Returns: undefined }
+      delete_board_decision: { Args: { p_id: string | null }; Returns: undefined }
+      delete_budget_line: { Args: { p_line_id: string }; Returns: undefined }
+      delete_campaign: { Args: { p_id: string | null }; Returns: undefined }
+      delete_meter: { Args: { p_id: string | null }; Returns: undefined }
+      delete_site_document: { Args: { p_id: string | null }; Returns: string }
+      delete_staff: { Args: { p_id: string | null }; Returns: undefined }
+      delete_staff_shift: { Args: { p_id: string | null }; Returns: undefined }
+      delete_supplier: { Args: { p_id: string | null }; Returns: undefined }
+      delete_vehicle: { Args: { p_id: string | null }; Returns: undefined }
       end_tenancy: {
         Args: { p_end_date?: string; p_tenancy_id: string }
+        Returns: undefined
+      }
+      enqueue_message: {
+        Args: {
+          p_bypass_consent?: boolean
+          p_channel: string
+          p_params?: Json
+          p_site_id: string
+          p_template_key: string
+          p_user_id: string
+        }
+        Returns: string
+      }
+      finalize_outbox: {
+        Args: {
+          p_error?: string
+          p_id: string | null
+          p_ok: boolean
+          p_provider_message_id?: string
+        }
         Returns: undefined
       }
       generate_accruals: {
         Args: {
           p_amount: number
+          p_batch_id?: string
           p_charge_type_id: string
           p_debtor_type?: string
           p_distribution: string
@@ -2619,7 +4598,66 @@ export type Database = {
         }
         Returns: number
       }
+      generate_accruals_from_budget: {
+        Args: {
+          p_budget_id: string
+          p_due_date: string
+          p_period_month: number
+          p_period_year: number
+        }
+        Returns: Json
+      }
       generate_site_code: { Args: never; Returns: string }
+      get_accrual_batches: {
+        Args: { p_limit?: number }
+        Returns: {
+          allocated_amount: number
+          batch_id: string
+          charge_name: string
+          created_at: string
+          due_date: string
+          period_month: number
+          period_year: number
+          total_amount: number
+          unit_count: number
+        }[]
+      }
+      get_assemblies: { Args: never; Returns: Json }
+      get_assembly_detail: { Args: { p_id: string | null }; Returns: Json }
+      get_assets: { Args: { p_category?: string }; Returns: Json }
+      get_board_decisions: { Args: { p_year?: number }; Returns: Json }
+      get_budget_report: {
+        Args: { p_budget_id: string }
+        Returns: {
+          accrued_ytd: number
+          charge_type_id: string
+          charge_type_name: string
+          distribution: string
+          label: string
+          line_id: string
+          planned_annual: number
+          planned_monthly: number
+          remaining: number
+        }[]
+      }
+      get_campaigns: { Args: never; Returns: Json }
+      get_community_posts: {
+        Args: { p_category?: string; p_kind?: string }
+        Returns: Json
+      }
+      get_company_portfolio: {
+        Args: { p_company_id?: string }
+        Returns: {
+          accrued_total: number
+          bank_balance: number
+          cash_balance: number
+          collected_total: number
+          open_debt: number
+          site_id: string
+          site_name: string
+        }[]
+      }
+      get_dashboard_summary: { Args: never; Returns: Json }
       get_debtors: {
         Args: never
         Returns: {
@@ -2634,6 +4672,37 @@ export type Database = {
           user_id: string
         }[]
       }
+      get_dm_thread: { Args: { p_resident_user_id: string }; Returns: Json }
+      get_dm_threads: { Args: never; Returns: Json }
+      get_enforcement_cases: {
+        Args: { p_include_closed?: boolean }
+        Returns: {
+          apartment_number: string
+          block: string
+          case_no: string
+          closed_at: string
+          current_debt: number
+          debt_at_open: number
+          debtor_name: string
+          id: string
+          lawyer: string
+          note: string
+          opened_at: string
+          status: string
+          unit_id: string
+        }[]
+      }
+      get_enforcement_events: {
+        Args: { p_case_id: string }
+        Returns: {
+          actor_name: string
+          body: string
+          created_at: string
+          id: string
+          kind: string
+        }[]
+      }
+      get_inspection_due: { Args: { p_within_days?: number }; Returns: Json }
       get_invitation_by_token: {
         Args: { p_token: string }
         Returns: {
@@ -2645,6 +4714,78 @@ export type Database = {
           site_name: string
         }[]
       }
+      get_isletme_defteri: {
+        Args: { p_month?: number; p_year: number }
+        Returns: Json
+      }
+      get_meter_history: { Args: { p_meter_id: string }; Returns: Json }
+      get_meters: { Args: { p_kind?: string }; Returns: Json }
+      get_monthly_site_report: {
+        Args: { p_month: number; p_year: number }
+        Returns: {
+          acik_anapara: number
+          acik_gecikme: number
+          acik_sikayet: number
+          avans_toplam: number
+          donem: string
+          gider_toplam: number
+          manager_emails: string[]
+          net: number
+          site_id: string
+          site_name: string
+          tahsilat_adet: number
+          tahsilat_toplam: number
+        }[]
+      }
+      get_my_assembly_ballot: { Args: never; Returns: Json }
+      get_my_companies: {
+        Args: never
+        Returns: {
+          company_id: string
+          is_active_company: boolean
+          name: string
+          role: string
+          site_count: number
+          vkn: string
+        }[]
+      }
+      get_my_meters: { Args: never; Returns: Json }
+      get_my_packages: { Args: never; Returns: Json }
+      get_my_thread: { Args: never; Returns: Json }
+      get_my_vehicles: { Args: never; Returns: Json }
+      get_my_visitor_passes: { Args: never; Returns: Json }
+      get_packages: { Args: { p_status?: string }; Returns: Json }
+      get_payment_queue: { Args: never; Returns: Json }
+      get_recent_activity: {
+        Args: { p_limit?: number }
+        Returns: {
+          actor_name: string
+          amount: number
+          description: string
+          happened_at: string
+          kind: string
+        }[]
+      }
+      get_site_documents: {
+        Args: {
+          p_category?: string
+          p_entity_id?: string
+          p_entity_type?: string
+        }
+        Returns: Json
+      }
+      get_site_transparency: { Args: never; Returns: Json }
+      get_staff: { Args: { p_include_inactive?: boolean }; Returns: Json }
+      get_staff_shifts: {
+        Args: { p_from: string; p_to: string }
+        Returns: Json
+      }
+      get_supplier_invoices: {
+        Args: { p_status?: string; p_supplier_id?: string }
+        Returns: Json
+      }
+      get_suppliers: { Args: { p_include_inactive?: boolean }; Returns: Json }
+      get_unit_shared_debt: { Args: never; Returns: Json }
       get_upcoming_dues: {
         Args: { p_days?: number }
         Returns: {
@@ -2658,7 +4799,67 @@ export type Database = {
           user_id: string
         }[]
       }
+      get_visitor_passes: {
+        Args: { p_date?: string; p_status?: string }
+        Returns: Json
+      }
+      get_wage_queue: {
+        Args: { p_month?: string }
+        Returns: {
+          account_name: string
+          full_name: string
+          monthly_wage: number
+          paid: boolean
+          paid_date: string
+          role: string
+          staff_id: string
+        }[]
+      }
+      get_work_order_detail: { Args: { p_id: string | null }; Returns: Json }
+      get_work_orders: { Args: { p_status?: string }; Returns: Json }
       is_valid_tc: { Args: { p_tc: string }; Returns: boolean }
+      link_site_to_company: {
+        Args: { p_company_id: string; p_site_id: string }
+        Returns: undefined
+      }
+      lookup_plate: { Args: { p_plate: string }; Returns: Json }
+      mark_attendance: {
+        Args: {
+          p_assembly_id: string
+          p_present?: boolean
+          p_proxy_name?: string
+          p_unit_id: string
+        }
+        Returns: undefined
+      }
+      mark_invoice_paid: {
+        Args: { p_cash_account_id?: string; p_id: string | null; p_paid_date?: string }
+        Returns: undefined
+      }
+      mark_package_delivered: {
+        Args: { p_id: string | null; p_note?: string }
+        Returns: undefined
+      }
+      open_enforcement: {
+        Args: {
+          p_case_no?: string
+          p_lawyer?: string
+          p_note?: string
+          p_status?: string
+          p_unit_id: string
+        }
+        Returns: string
+      }
+      pay_staff_wage: {
+        Args: {
+          p_cash_account_id: string
+          p_month?: string
+          p_paid_date?: string
+          p_staff_id: string
+        }
+        Returns: string
+      }
+      publish_assembly_call: { Args: { p_id: string | null }; Returns: undefined }
       record_collection: {
         Args: {
           p_amount: number
@@ -2670,6 +4871,28 @@ export type Database = {
         }
         Returns: number
       }
+      record_meter_reading: {
+        Args: {
+          p_allow_decrease?: boolean
+          p_meter_id: string
+          p_note?: string
+          p_read_at?: string
+          p_reading: number
+        }
+        Returns: string
+      }
+      register_package: {
+        Args: { p_carrier?: string; p_description?: string; p_unit_id: string }
+        Returns: string
+      }
+      reject_invoice: {
+        Args: { p_id: string | null; p_reason?: string }
+        Returns: undefined
+      }
+      remove_community_post: {
+        Args: { p_id: string | null; p_reason?: string }
+        Returns: undefined
+      }
       request_site_deletion: { Args: { p_reason: string }; Returns: Json }
       request_site_membership: { Args: { p_site_code: string }; Returns: Json }
       run_monthly_accruals: {
@@ -2680,6 +4903,191 @@ export type Database = {
           site_id: string
           site_name: string
         }[]
+      }
+      run_monthly_late_fees: {
+        Args: { p_as_of_date?: string }
+        Returns: {
+          fees_added: number
+          note: string
+          site_id: string
+          site_name: string
+        }[]
+      }
+      run_work_order_templates: {
+        Args: { p_as_of?: string }
+        Returns: {
+          created: number
+          site_id: string
+        }[]
+      }
+      save_assembly: {
+        Args: {
+          p_first_meeting_at?: string
+          p_id: string | null
+          p_kind?: string
+          p_location?: string
+          p_second_meeting_at?: string
+          p_title: string
+        }
+        Returns: string
+      }
+      save_assembly_item: {
+        Args: {
+          p_assembly_id: string
+          p_description?: string
+          p_id: string | null
+          p_item_no: number
+          p_title: string
+        }
+        Returns: string
+      }
+      save_asset: {
+        Args: {
+          p_category?: string
+          p_id: string | null
+          p_inspection_note?: string
+          p_location?: string
+          p_name: string
+          p_next_inspection_date?: string
+          p_note?: string
+          p_purchase_date?: string
+          p_quantity?: number
+          p_serial_no?: string
+          p_status?: string
+          p_value?: number
+          p_warranty_until?: string
+        }
+        Returns: string
+      }
+      save_board_decision: {
+        Args: {
+          p_assembly_id?: string
+          p_body?: string
+          p_decision_date?: string
+          p_id: string | null
+          p_participants?: string
+          p_source?: string
+          p_subject: string
+        }
+        Returns: string
+      }
+      save_budget: {
+        Args: { p_name?: string; p_note?: string; p_year: number }
+        Returns: string
+      }
+      save_budget_line: {
+        Args: {
+          p_annual_amount: number
+          p_budget_id: string
+          p_charge_type_id?: string
+          p_distribution?: string
+          p_label: string
+          p_line_id?: string
+          p_note?: string
+        }
+        Returns: string
+      }
+      save_campaign: {
+        Args: {
+          p_active?: boolean
+          p_description?: string
+          p_discount_text?: string
+          p_id: string | null
+          p_title: string
+          p_valid_until?: string
+          p_vendor_name?: string
+        }
+        Returns: string
+      }
+      save_meter: {
+        Args: {
+          p_active?: boolean
+          p_id: string | null
+          p_kind?: string
+          p_serial_no?: string
+          p_unit_id: string
+        }
+        Returns: string
+      }
+      save_staff: {
+        Args: {
+          p_active?: boolean
+          p_end_date?: string
+          p_full_name: string
+          p_id: string | null
+          p_id_no?: string
+          p_monthly_wage?: number
+          p_note?: string
+          p_phone?: string
+          p_role?: string
+          p_start_date?: string
+        }
+        Returns: string
+      }
+      save_staff_shift: {
+        Args: {
+          p_date: string
+          p_end: string
+          p_id: string | null
+          p_note?: string
+          p_staff_id: string
+          p_start: string
+        }
+        Returns: string
+      }
+      save_supplier: {
+        Args: {
+          p_active?: boolean
+          p_category?: string
+          p_contact_person?: string
+          p_email?: string
+          p_iban?: string
+          p_id: string | null
+          p_name: string
+          p_note?: string
+          p_phone?: string
+          p_vkn?: string
+        }
+        Returns: string
+      }
+      save_supplier_invoice: {
+        Args: {
+          p_amount: number
+          p_description?: string
+          p_due_date?: string
+          p_id: string | null
+          p_invoice_date?: string
+          p_invoice_no?: string
+          p_supplier_id: string
+          p_work_order_id?: string
+        }
+        Returns: string
+      }
+      save_vehicle: {
+        Args: {
+          p_active?: boolean
+          p_id: string | null
+          p_label?: string
+          p_plate: string
+          p_unit_id: string
+        }
+        Returns: string
+      }
+      send_dm: {
+        Args: { p_body: string; p_resident_user_id?: string }
+        Returns: string
+      }
+      set_gate_role: {
+        Args: { p_enable: boolean; p_user_id: string }
+        Returns: undefined
+      }
+      set_item_voting: {
+        Args: { p_item_id: string; p_open: boolean }
+        Returns: undefined
+      }
+      set_ledger_lock: {
+        Args: { p_locked_until: string; p_site_id: string }
+        Returns: undefined
       }
       set_unit_occupant: {
         Args: {
@@ -2693,6 +5101,17 @@ export type Database = {
         }
         Returns: string
       }
+      set_work_order_cost: {
+        Args: {
+          p_cash_account_id?: string
+          p_cost: number
+          p_cost_note?: string
+          p_expense_date?: string
+          p_id: string | null
+        }
+        Returns: undefined
+      }
+      switch_active_company: { Args: { p_company_id: string }; Returns: string }
       switch_active_site: { Args: { p_site_id: string }; Returns: string }
       sync_dues_payment_to_cari: {
         Args: { p_payment_id: string }
@@ -2718,10 +5137,28 @@ export type Database = {
         }
         Returns: string
       }
+      unlink_site_from_company: {
+        Args: { p_site_id: string }
+        Returns: undefined
+      }
       unwaive_accrual: { Args: { p_accrual_id: string }; Returns: undefined }
+      update_enforcement: {
+        Args: {
+          p_case_id: string
+          p_case_no?: string
+          p_lawyer?: string
+          p_note?: string
+          p_status?: string
+        }
+        Returns: undefined
+      }
       update_site_setting: {
         Args: { p_key: string; p_site_id: string; p_value: boolean }
         Returns: Json
+      }
+      update_work_order_status: {
+        Args: { p_id: string | null; p_note?: string; p_status: string }
+        Returns: undefined
       }
       validate_site_code: {
         Args: { p_code: string }
@@ -2734,6 +5171,7 @@ export type Database = {
         }[]
       }
       validate_tc_kimlik: { Args: { p_tc: string }; Returns: boolean }
+      verify_visitor_code: { Args: { p_code: string }; Returns: Json }
       waive_accrual: {
         Args: { p_accrual_id: string; p_reason?: string }
         Returns: undefined

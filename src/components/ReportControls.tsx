@@ -1,8 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { buildExportBlob, downloadBlob } from '@/lib/excel';
+
+// Rapor #36: son kullanılan dönem hatırlansın — tüm raporlar aynı aralığı paylaşır.
+const RANGE_KEY = 'manager-report-range';
 
 export type ExportSheet = { name: string; rows: Record<string, unknown>[] };
 
@@ -26,7 +29,24 @@ export function ReportControls({
   const [f, setF] = useState(from);
   const [t, setT] = useState(to);
 
+  // URL'de aralık yoksa (rapora ilk giriş) en son kullanılan aralığı uygula.
+  useEffect(() => {
+    if (!showRange) return;
+    if (params.get('from') || params.get('to')) return;
+    try {
+      const saved = JSON.parse(localStorage.getItem(RANGE_KEY) || 'null') as { from: string; to: string } | null;
+      if (saved?.from && saved?.to && (saved.from !== from || saved.to !== to)) {
+        setF(saved.from); setT(saved.to);
+        const q = new URLSearchParams(params.toString());
+        q.set('from', saved.from); q.set('to', saved.to);
+        router.replace(`${pathname}?${q.toString()}`);
+      }
+    } catch { /* localStorage erişilemezse varsayılan aralık kullanılır */ }
+  // yalnız ilk render'da: pathname değişince yeni rapor sayfasında tekrar çalışır
+  }, [pathname]); // eslint-disable-line react-hooks/exhaustive-deps
+
   function apply() {
+    try { localStorage.setItem(RANGE_KEY, JSON.stringify({ from: f, to: t })); } catch { /* yoksay */ }
     const q = new URLSearchParams(params.toString());
     q.set('from', f);
     q.set('to', t);

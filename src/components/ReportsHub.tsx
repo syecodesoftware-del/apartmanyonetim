@@ -24,6 +24,7 @@ const REPORTS: ReportMeta[] = [
   { key: 'aging', href: '/reports/aging', icon: '📅', title: 'Borç Yaşlandırma', desc: 'Güncel borçlar: anapara/gecikme kırılımı, borçlu daireler.', hasRange: false, file: () => 'borc-yaslandirma.xlsx' },
   { key: 'cash', href: '/reports/cash', icon: '🏦', title: 'Kasa & Banka Durumu', desc: 'Hesap bazında güncel bakiye ve dönem hareket özeti.', hasRange: true, file: (f, t) => `kasa-banka-${f}_${t}.xlsx` },
   { key: 'collection-rate', href: '/reports/collection-rate', icon: '🎯', title: 'Tahsilat Oranı', desc: 'Dönem bazında tahakkuk vs tahsil yüzdesi.', hasRange: false, file: () => 'tahsilat-orani.xlsx' },
+  { key: 'dues-grid', href: '/reports', icon: '📋', title: 'Aidat Çizelgesi (Yıllık)', desc: 'Daire × 12 ay matrisi: kim hangi ayı ödedi — panoya asılan klasik çizelge. Yıl, başlangıç tarihinden alınır.', hasRange: true, file: (f) => `aidat-cizelgesi-${f.slice(0, 4)}.xlsx` },
 ];
 
 const PREVIEW_LIMIT = 50;
@@ -143,9 +144,11 @@ export function ReportsHub({ defaultFrom, defaultTo }: { defaultFrom: string; de
                 </>
               )}
               <div className="ml-auto flex items-center gap-2">
-                <Link href={active.href} className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50">
-                  Tam sayfada aç
-                </Link>
+                {active.href !== '/reports' && (
+                  <Link href={active.href} className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50">
+                    Tam sayfada aç
+                  </Link>
+                )}
                 <button onClick={exportXlsx} disabled={!hasData || loading}
                   className="rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-1.5 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-50">
                   📊 Excel İndir

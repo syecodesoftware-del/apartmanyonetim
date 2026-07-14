@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 /** /units listesinden tıklanınca daire detayı popup olarak açılır; URL /units/[unitId] kalır. */
 export default async function UnitDetailModal({ params }: { params: Promise<{ unitId: string }> }) {
   const { unitId } = await params;
-  await requireManager();
+  const manager = await requireManager();
 
   const data = await getUnitDetailData(unitId);
   if (!data) return null;
@@ -29,6 +29,8 @@ export default async function UnitDetailModal({ params }: { params: Promise<{ un
         kalanGecikme={data.kalanGecikme}
         ledger={data.ledger}
         residents={data.residents}
+        accounts={data.accounts}
+        siteName={manager.siteName}
       />
     </RouteModal>
   );

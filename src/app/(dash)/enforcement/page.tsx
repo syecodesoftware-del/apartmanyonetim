@@ -23,6 +23,7 @@ export default async function EnforcementPage() {
       <EnforcementPanel
         cases={(cases ?? []) as EnforcementCase[]}
         debtors={(debtors ?? []) as DebtorUnit[]}
+        siteName={manager.siteName}
       />
     </>
   );
