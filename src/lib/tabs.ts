@@ -59,6 +59,7 @@ export const TAB_CLUSTERS: TabCluster[] = [
       { href: '/settings', label: 'Site & Üyelik' },
       { href: '/blocks', label: 'Adalar / Bloklar' },
       { href: '/excel', label: 'Excel Aktarım' },
+      { href: '/consent', label: 'KVKK Açık Rıza' },
     ],
   },
 ];

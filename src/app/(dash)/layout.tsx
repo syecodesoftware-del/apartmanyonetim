@@ -9,6 +9,7 @@ import { MobileMenuButton } from '@/components/MobileMenuButton';
 import { ClusterTabs } from '@/components/ClusterTabs';
 import { GlobalSearch } from '@/components/GlobalSearch';
 import { GateOnlyGuard } from '@/components/GateOnlyGuard';
+import { SupportWidget } from '@/components/SupportWidget';
 
 export default async function DashLayout({ children, modal }: { children: React.ReactNode; modal: React.ReactNode }) {
   const manager = await requireManager();
@@ -80,6 +81,7 @@ export default async function DashLayout({ children, modal }: { children: React.
           {modal}
         </div>
       </div>
+      {!manager.gateOnly && <SupportWidget />}
       </NavProvider>
     </ReadOnlyProvider>
   );
