@@ -201,7 +201,7 @@ export function SuppliersPanel({ canApprove, suppliers: initSup, invoices: initI
                     <Td>{q.due_date ? <span className={q.overdue ? 'font-medium text-red-600' : 'text-slate-500'}>{date(q.due_date)}{q.overdue ? ' (geçti)' : ''}</span> : '—'}</Td>
                     <Td className="text-right tabular-nums font-medium">{money(Number(q.amount), true)}</Td>
                     <Td className="text-xs text-slate-400">{q.iban ?? '—'}</Td>
-                    {!ro && <Td className="text-right"><button onClick={() => openPay(q.id, `${q.supplier_name}${q.invoice_no ? ' · ' + q.invoice_no : ''}`, Number(q.amount))} disabled={busy} className="text-xs font-medium text-green-600 hover:underline disabled:opacity-50">Ödendi</button></Td>}
+                    {!ro && <Td className="text-right"><button onClick={() => openPay(q.id, `${q.supplier_name}${q.invoice_no ? ' · ' + q.invoice_no : ''}`, Number(q.amount))} disabled={busy} className="text-xs font-medium text-green-600 hover:underline disabled:opacity-50">Ödendi İşaretle</button></Td>}
                   </tr>
                 ))}
               </tbody>
@@ -257,7 +257,7 @@ export function SuppliersPanel({ canApprove, suppliers: initSup, invoices: initI
                                 {canApprove && <button onClick={() => { setRejectTarget(i); setRejectReason(''); }} disabled={busy} className="ml-3 text-xs text-red-500 hover:underline disabled:opacity-50">Reddet</button>}
                               </>
                             )}
-                            {i.status === 'approved' && <button onClick={() => openPay(i.id, `${i.supplier_name}${i.invoice_no ? ' · ' + i.invoice_no : ''}`, Number(i.amount))} disabled={busy} className="text-xs font-medium text-green-600 hover:underline disabled:opacity-50">Ödendi</button>}
+                            {i.status === 'approved' && <button onClick={() => openPay(i.id, `${i.supplier_name}${i.invoice_no ? ' · ' + i.invoice_no : ''}`, Number(i.amount))} disabled={busy} className="text-xs font-medium text-green-600 hover:underline disabled:opacity-50">Ödendi İşaretle</button>}
                           </Td>
                         )}
                       </tr>
